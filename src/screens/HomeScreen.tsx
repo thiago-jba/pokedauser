@@ -51,7 +51,7 @@ import { useStore } from '../store';
 import { colors } from '../theme';
 import { matchesQuery } from '../variants';
 
-export function HomeScreen({ openSet }: { openSet: (setId: string) => void }) {
+export function HomeScreen({ openSet, openSettings }: { openSet: (setId: string) => void; openSettings: () => void }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { data, isOwned, upsertCollection, removeCollection, reload, setHomeSort, setHomeView, toggleEra, patchCollection } = useStore();
@@ -511,6 +511,16 @@ export function HomeScreen({ openSet }: { openSet: (setId: string) => void }) {
       <Modal visible={menu} transparent animationType="fade" onRequestClose={() => setMenu(false)}>
         <Pressable style={styles.menuBackdrop} onPress={() => setMenu(false)}>
           <View style={[styles.menu, { top: insets.top + 56 }]}>
+            <Pressable
+              style={styles.menuItem}
+              onPress={() => {
+                setMenu(false);
+                openSettings();
+              }}
+            >
+              <Text style={styles.menuText}>⚙︎  Configurações</Text>
+              <Text style={styles.menuSub}>País padrão das cartas e outras opções</Text>
+            </Pressable>
             <Pressable style={styles.menuItem} onPress={exportBackup}>
               <Text style={styles.menuText}>Exportar backup</Text>
               <Text style={styles.menuSub}>Salvar no Drive, WhatsApp, e-mail…</Text>

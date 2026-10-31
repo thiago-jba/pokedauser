@@ -23,6 +23,9 @@ interface Store {
   setRarityFilter: (setId: string, rarities: string[]) => void;
   setCategoryFilter: (setId: string, categories: string[]) => void;
   setHomeSort: (sort: string) => void;
+  /** país padrão ao marcar uma carta (Configurações) */
+  defaultCountry: string;
+  setDefaultCountry: (code: string) => void;
   setHomeView: (view: 'grade' | 'lista') => void;
   toggleEra: (era: string) => void;
   patchCollection: (setId: string, fields: Partial<CollectionEntry>) => void;
@@ -55,12 +58,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const isOwned = useCallback((setId: string, key: string) => !!owned[setId]?.[key], [owned]);
   const ownedCountry = useCallback((setId: string, key: string) => owned[setId]?.[key], [owned]);
 
-  // marcar = carta nacional (Brasil); quem já tem país mantém o seu
+  // marcar = país padrão das Configurações (Brasil, se não escolheu outro); quem já tem país mantém o seu
   const setOwned = useCallback((setId: string, keys: string[], value: boolean) => {
     setData((d) => {
       const cur = { ...(d.owned[setId] ?? {}) };
       for (const k of keys) {
-        if (value) cur[k] = cur[k] ?? DEFAULT_COUNTRY;
+        if (value) cur[k] = cur[k] ?? d.settings?.defaultCountry ?? DEFAULT_COUNTRY;
         else delete cur[k];
       }
       return { ...d, owned: { ...d.owned, [setId]: cur } };
@@ -71,7 +74,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setData((d) => {
       const cur = { ...(d.owned[setId] ?? {}) };
       if (cur[key]) delete cur[key];
-      else cur[key] = DEFAULT_COUNTRY;
+      else cur[key] = d.settings?.defaultCountry ?? DEFAULT_COUNTRY;
       return { ...d, owned: { ...d.owned, [setId]: cur } };
     });
   }, []);
@@ -149,6 +152,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const setHomeSort = useCallback((homeSort: string) => setData((d) => ({ ...d, homeSort })), []);
+  const defaultCountry = data.settings?.defaultCountry ?? DEFAULT_COUNTRY;
+  const setDefaultCountry = useCallback(
+    (code: string) => setData((d) => ({ ...d, settings: { ...d.settings, defaultCountry: code } })),
+    [],
+  );
   const setHomeView = useCallback((homeView: 'grade' | 'lista') => setData((d) => ({ ...d, homeView })), []);
   const toggleEra = useCallback((era: string) => {
     setData((d) => {
@@ -181,12 +189,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setRarityFilter,
       setCategoryFilter,
       setHomeSort,
+      defaultCountry,
+      setDefaultCountry,
       setHomeView,
       toggleEra,
       patchCollection,
       reload,
     }),
-    [data, isOwned, ownedCountry, setCountry, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, setCategoryFilter, setHomeSort, setHomeView, toggleEra, patchCollection, reload],
+    [data, isOwned, ownedCountry, setCountry, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, setCategoryFilter, setHomeSort, defaultCountry, setDefaultCountry, setHomeView, toggleEra, patchCollection, reload],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

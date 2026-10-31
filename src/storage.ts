@@ -35,6 +35,13 @@ export interface AppData {
   homeView?: 'grade' | 'lista';
   /** eras recolhidas na tela inicial */
   collapsedEras?: string[];
+  /** configurações do app */
+  settings?: AppSettings;
+}
+
+export interface AppSettings {
+  /** país usado ao marcar uma carta com um toque (código ISO, ex.: "BR") */
+  defaultCountry?: string;
 }
 
 export const emptyData = (): AppData => ({ version: 1, collections: [], owned: {}, custom: {}, filters: {} });
@@ -76,6 +83,7 @@ export function loadData(): AppData {
     homeSort: d.homeSort,
     homeView: d.homeView,
     collapsedEras: d.collapsedEras ?? [],
+    settings: d.settings ?? {},
   };
 }
 
@@ -200,5 +208,6 @@ export function restoreBackup(b: BackupFile) {
     homeSort: b.data.homeSort,
     homeView: b.data.homeView,
     collapsedEras: b.data.collapsedEras ?? [],
+    settings: b.data.settings ?? {},
   });
 }

@@ -7,10 +7,11 @@ import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { UpdateBanner } from './src/components/UpdateBanner';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { SetScreen } from './src/screens/SetScreen';
+import { SettingsScreen } from './src/screens/SettingsScreen';
 import { StoreProvider } from './src/store';
 import { colors } from './src/theme';
 
-type Route = { name: 'home' } | { name: 'set'; setId: string };
+type Route = { name: 'home' } | { name: 'set'; setId: string } | { name: 'settings' };
 
 export default function App() {
   const [route, setRoute] = useState<Route>({ name: 'home' });
@@ -36,7 +37,12 @@ export default function App() {
           <StatusBar style="light" />
           <ErrorBoundary onReset={() => setRoute({ name: 'home' })}>
             {route.name === 'home' ? (
-              <HomeScreen openSet={(setId) => setRoute({ name: 'set', setId })} />
+              <HomeScreen
+                openSet={(setId) => setRoute({ name: 'set', setId })}
+                openSettings={() => setRoute({ name: 'settings' })}
+              />
+            ) : route.name === 'settings' ? (
+              <SettingsScreen onBack={() => setRoute({ name: 'home' })} />
             ) : (
               <SetScreen key={route.setId} setId={route.setId} onBack={() => setRoute({ name: 'home' })} />
             )}
