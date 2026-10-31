@@ -7,15 +7,17 @@ import { GlassShine } from '../components/Glass';
 import { PokedexCardDetail } from '../components/PokedexCardDetail';
 import { IconButton } from '../components/ui';
 import { artworkUrl, dexNumber, loadSpeciesCache } from '../pokedex';
+import type { PokemonCardBrief } from '../pokedex';
 import type { PokedexCard } from '../storage';
 import { useStore } from '../store';
 import { CARD_RATIO, colors } from '../theme';
 
-export function PokemonScreen({ dexId, onBack }: { dexId: number; onBack: () => void }) {
+export function PokemonScreen({ dexId, onBack, prefill }: { dexId: number; onBack: () => void; prefill?: PokemonCardBrief }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { data, removePokedexCard } = useStore();
-  const [adding, setAdding] = useState(false);
+  // se veio da câmera da tela principal, já abre a inclusão com a carta lida
+  const [adding, setAdding] = useState(!!prefill);
   const [detail, setDetail] = useState<PokedexCard | null>(null);
   const name = loadSpeciesCache()?.find((s) => s.id === dexId)?.name ?? dexNumber(dexId);
   const cards = data.pokedex?.[dexId] ?? [];
@@ -92,7 +94,7 @@ export function PokemonScreen({ dexId, onBack }: { dexId: number; onBack: () => 
           setDetail(null);
         }}
       />
-      <AddPokedexCard visible={adding} dexId={dexId} pokemonName={name} onClose={() => setAdding(false)} />
+      <AddPokedexCard visible={adding} dexId={dexId} pokemonName={name} prefill={prefill} onClose={() => setAdding(false)} />
     </View>
   );
 }

@@ -11,6 +11,7 @@ import { SettingsScreen } from './src/screens/SettingsScreen';
 import { PokedexScreen } from './src/screens/PokedexScreen';
 import { PokemonScreen } from './src/screens/PokemonScreen';
 import { TabBar } from './src/components/TabBar';
+import type { PokemonCardBrief } from './src/pokedex';
 import { StoreProvider } from './src/store';
 import { colors } from './src/theme';
 
@@ -19,7 +20,7 @@ type Route =
   | { name: 'set'; setId: string }
   | { name: 'settings' }
   | { name: 'pokedex' }
-  | { name: 'pokemon'; dexId: number };
+  | { name: 'pokemon'; dexId: number; prefill?: PokemonCardBrief };
 
 export default function App() {
   const [route, setRoute] = useState<Route>({ name: 'home' });
@@ -56,9 +57,14 @@ export default function App() {
             ) : route.name === 'settings' ? (
               <SettingsScreen onBack={() => setRoute({ name: 'home' })} />
             ) : route.name === 'pokedex' ? (
-              <PokedexScreen openPokemon={(dexId) => setRoute({ name: 'pokemon', dexId })} />
+              <PokedexScreen openPokemon={(dexId, prefill) => setRoute({ name: 'pokemon', dexId, prefill })} />
             ) : route.name === 'pokemon' ? (
-              <PokemonScreen key={route.dexId} dexId={route.dexId} onBack={() => setRoute({ name: 'pokedex' })} />
+              <PokemonScreen
+                key={`${route.dexId}-${route.prefill?.id ?? ''}`}
+                dexId={route.dexId}
+                prefill={route.prefill}
+                onBack={() => setRoute({ name: 'pokedex' })}
+              />
             ) : (
               <SetScreen key={route.setId} setId={route.setId} onBack={() => setRoute({ name: 'home' })} />
             )}

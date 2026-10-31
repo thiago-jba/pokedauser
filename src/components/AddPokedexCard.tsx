@@ -2,11 +2,12 @@ import { Image } from 'expo-image';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { fetchAllSets, SetSummary } from '../api';
-import { CardDetailInfo, fetchCardDetail, fetchPokemonCards, fetchSetCards, matchFooter, parseFooter, PokemonCardBrief } from '../pokedex';
+import { fetchCardDetail, fetchPokemonCards, fetchSetCards, matchesCardNumber, matchFooter, parseFooter } from '../pokedex';
+import type { CardDetailInfo, PokemonCardBrief } from '../pokedex';
 import { loadSetsCacheAnyAge, saveSetsCache } from '../storage';
 import { useStore } from '../store';
 import { CARD_RATIO, colors } from '../theme';
-import { matchesQuery } from '../variants';
+import { matchesQuery, normalize } from '../variants';
 import { CardScanner } from './CardScanner';
 import { Chip } from './ui';
 
@@ -69,7 +70,20 @@ function AutoField({
   );
 }
 
-export function AddPokedexCard({ visible, dexId, pokemonName, onClose }: { visible: boolean; dexId: number; pokemonName: string; onClose: () => void }) {
+export function AddPokedexCard({
+  visible,
+  dexId,
+  pokemonName,
+  onClose,
+  prefill,
+}: {
+  visible: boolean;
+  dexId: number;
+  pokemonName: string;
+  onClose: () => void;
+  /** carta já identificada pela câmera da tela principal da Pokédex */
+  prefill?: PokemonCardBrief;
+}) {
   const { addPokedexCard, data } = useStore();
   const [sets, setSets] = useState<SetSummary[]>(() => loadSetsCacheAnyAge() ?? []);
   const [pokemonCards, setPokemonCards] = useState<PokemonCardBrief[]>([]);
@@ -119,6 +133,16 @@ export function AddPokedexCard({ visible, dexId, pokemonName, onClose }: { visib
       .finally(() => setLoading(false));
   }, [visible, dexId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // carta lida na tela principal: já vem preenchida
+  useEffect(() => {
+    if (!visible || !prefill) return;
+    setSetId(prefill.setId);
+    setSetText(setById.get(prefill.setId)?.namePt ?? setById.get(prefill.setId)?.nameEn ?? prefill.setId);
+    setCard(prefill);
+    setCardText(cardTitle(prefill));
+    setScanMsg('Carta lida pela câmera — confira o tipo e toque em Adicionar.');
+  }, [visible, prefill?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // cartas da coleção escolhida
   useEffect(() => {
     if (!setId) return setSetCards([]);
@@ -143,18 +167,28 @@ export function AddPokedexCard({ visible, dexId, pokemonName, onClose }: { visib
     }));
   }, [sets, setText, setId, setsWithPokemon, pokemonName]);
 
+  // Só cartas deste Pokémon: as da busca por Pokémon e, na coleção escolhida, as que têm o nome dele
+  // (cobre cartas recentes que a fonte ainda não ligou ao número da Pokédex).
+  const candidates = useMemo(() => {
+    const base = setId ? pokemonCards.filter((c) => c.setId === setId) : pokemonCards;
+    const ids = new Set(base.map((c) => c.id));
+    const byName = setId ? setCards.filter((c) => !ids.has(c.id) && normalize(c.name).includes(normalize(pokemonName))) : [];
+    return [...base, ...byName];
+  }, [setId, pokemonCards, setCards, pokemonName]);
+
+  const cardTitle = (c: PokemonCardBrief) => {
+    const official = setById.get(c.setId)?.official;
+    return `${c.localId}${official && /^\d+$/.test(c.localId) ? `/${official}` : ''} · ${c.name}`;
+  };
+
   const cardSuggestions: Suggestion[] = useMemo(() => {
-    if (!setId || card) return [];
-    const mine = pokemonCards.filter((c) => c.setId === setId);
-    const ids = new Set(mine.map((c) => c.id));
-    const all = [...mine, ...setCards.filter((c) => !ids.has(c.id))];
-    const t = cardText.trim().replace(/^#/, '');
-    const official = setById.get(setId)?.official;
-    return all
-      .filter((c) => !t || (/^\d+$/.test(t) ? String(Number(c.localId)).startsWith(String(Number(t))) : matchesQuery(`${c.name} ${c.localId}`, t)))
-      .slice(0, 8)
-      .map((c) => ({ key: c.id, title: `${c.localId}${official ? `/${official}` : ''} · ${c.name}`, subtitle: ids.has(c.id) ? pokemonName : undefined }));
-  }, [setId, card, pokemonCards, setCards, cardText, setById, pokemonName]);
+    if (card) return [];
+    const t = cardText.trim();
+    return candidates
+      .filter((c) => !t || matchesCardNumber(c.localId, t) || matchesQuery(`${c.name} ${c.localId}`, t))
+      .slice(0, 12)
+      .map((c) => ({ key: c.id, title: cardTitle(c), subtitle: setId ? undefined : setName(c.setId) }));
+  }, [card, candidates, cardText, setId, setById]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pickSet = (id: string) => {
     setSetId(id);
@@ -166,8 +200,10 @@ export function AddPokedexCard({ visible, dexId, pokemonName, onClose }: { visib
     const c = [...pokemonCards, ...setCards].find((x) => x.id === id);
     if (!c) return;
     setCard(c);
-    const official = setById.get(c.setId)?.official;
-    setCardText(`${c.localId}${official ? `/${official}` : ''} · ${c.name}`);
+    // escolher a carta já preenche a coleção
+    setSetId(c.setId);
+    setSetText(setName(c.setId));
+    setCardText(cardTitle(c));
   };
 
   const onRead = (text: string) => {
@@ -177,7 +213,7 @@ export function AddPokedexCard({ visible, dexId, pokemonName, onClose }: { visib
     if (!found.length) {
       setScanMsg(
         read.number !== undefined
-          ? `Li ${read.number}/${read.total ?? '?'}, mas não achei uma carta de ${pokemonName} com esse número. Preencha abaixo.`
+          ? `Li ${read.promo ?? `${read.number}/${read.total ?? '?'}`}, mas não achei uma carta de ${pokemonName} com esse número. Preencha abaixo.`
           : 'Não consegui ler o número da carta. Preencha abaixo ou tente de novo.',
       );
       return;
@@ -186,9 +222,12 @@ export function AddPokedexCard({ visible, dexId, pokemonName, onClose }: { visib
     setSetId(c.setId);
     setSetText(setName(c.setId));
     setCard(c);
-    const official = setById.get(c.setId)?.official;
-    setCardText(`${c.localId}${official ? `/${official}` : ''} · ${c.name}`);
-    setScanMsg(found.length > 1 ? `Encontrei ${found.length} possibilidades; confira a coleção.` : `Li ${read.number}/${read.total ?? '?'} — confira e toque em Adicionar.`);
+    setCardText(cardTitle(c));
+    setScanMsg(
+      found.length > 1
+        ? `Encontrei ${found.length} possibilidades; confira a coleção.`
+        : `Li ${read.promo ?? `${read.number}/${read.total ?? '?'}`} — confira e toque em Adicionar.`,
+    );
   };
 
   const reset = () => {
@@ -254,7 +293,7 @@ export function AddPokedexCard({ visible, dexId, pokemonName, onClose }: { visib
             />
             <AutoField
               label="Carta"
-              placeholder={setId ? 'Digite o número ou o nome' : 'Escolha a coleção primeiro'}
+              placeholder={setId ? 'Número ou nome (ex.: 116, SWSH232)' : `Todas as cartas de ${pokemonName} — digite o número ou o nome`}
               text={cardText}
               onText={(t) => {
                 setCardText(t);
@@ -262,7 +301,6 @@ export function AddPokedexCard({ visible, dexId, pokemonName, onClose }: { visib
               }}
               suggestions={cardSuggestions}
               onPick={pickCard}
-              disabled={!setId}
             />
 
             {card ? (

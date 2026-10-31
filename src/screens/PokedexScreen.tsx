@@ -1,12 +1,16 @@
 import { Image } from 'expo-image';
 import React, { memo, useEffect, useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Modal, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { CardScanner } from '../components/CardScanner';
+import { fetchAllSets } from '../api';
+import { loadSetsCacheAnyAge, saveSetsCache } from '../storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassShine } from '../components/Glass';
 import { MultiPicker } from '../components/MultiPicker';
 import { TAB_BAR_SPACE } from '../components/TabBar';
 import { ProgressBar, Segmented } from '../components/ui';
-import { artworkUrl, dexNumber, getSpecies, loadSpeciesCache, Species } from '../pokedex';
+import { artworkUrl, dexNumber, getSpecies, identifyCard, loadSpeciesCache, parseFooter } from '../pokedex';
+import type { PokemonCardBrief, Species } from '../pokedex';
 import type { PokedexCard } from '../storage';
 import { useStore } from '../store';
 import { CARD_RATIO, colors } from '../theme';
@@ -15,11 +19,53 @@ import type { VariantCategory } from '../variants';
 
 type Status = 'todos' | 'tenho' | 'faltam';
 
-export function PokedexScreen({ openPokemon }: { openPokemon: (id: number) => void }) {
+export function PokedexScreen({ openPokemon }: { openPokemon: (id: number, prefill?: PokemonCardBrief) => void }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { data, setPokedexFilters } = useStore();
   const [picker, setPicker] = useState<'tipo' | 'raridade' | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [identifying, setIdentifying] = useState(false);
+  const [choices, setChoices] = useState<{ card: PokemonCardBrief; dexIds: number[] }[] | null>(null);
+
+  // Câmera na tela principal: descobre qual é a carta (e o Pokémon) e abre a inclusão já preenchida
+  const onRead = async (text: string) => {
+    setScanning(false);
+    const read = parseFooter(text);
+    if (read.number === undefined && !read.promo) {
+      Alert.alert('Não consegui ler', 'Não achei o número da carta no rodapé. Tente de novo com mais luz ou adicione pelo Pokémon.');
+      return;
+    }
+    setIdentifying(true);
+    try {
+      // o total oficial de cada coleção é o que separa "116/128" das outras cartas 116
+      let sets = loadSetsCacheAnyAge() ?? [];
+      if (!sets.length) {
+        sets = await fetchAllSets();
+        saveSetsCache(sets);
+      }
+      const byId = new Map(sets.map((x) => [x.id, x]));
+      const found = await identifyCard(read, (id) => ({
+        official: byId.get(id)?.official,
+        code: data.collections.find((c) => c.setId === id)?.code,
+      }));
+      if (!found.length) {
+        Alert.alert('Carta não encontrada', `Li ${read.promo ?? `${read.number}/${read.total ?? '?'}`}, mas não achei a carta. Adicione pelo Pokémon, digitando a coleção e a carta.`);
+      } else if (found.length === 1) {
+        openPokemon(found[0].dexIds[0], found[0].card);
+      } else {
+        setChoices(found);
+      }
+    } catch {
+      Alert.alert('Sem conexão', 'Não foi possível identificar a carta agora.');
+    } finally {
+      setIdentifying(false);
+    }
+  };
+  const setLabel = (id: string) => {
+    const x = loadSetsCacheAnyAge()?.find((s) => s.id === id);
+    return x?.namePt ?? x?.nameEn ?? id;
+  };
   const [species, setSpecies] = useState<Species[] | null>(() => loadSpeciesCache());
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState('');
@@ -97,7 +143,12 @@ export function PokedexScreen({ openPokemon }: { openPokemon: (id: number) => vo
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <View style={{ paddingHorizontal: 16 }}>
-            <Text style={styles.h1}>Pokédex</Text>
+            <View style={styles.titleRow}>
+              <Text style={styles.h1}>Pokédex</Text>
+              <Pressable style={styles.scanBtn} onPress={() => setScanning(true)} disabled={identifying}>
+                {identifying ? <ActivityIndicator color={colors.text} /> : <Text style={styles.scanText}>📷 Ler carta</Text>}
+              </Pressable>
+            </View>
             <View style={styles.summary}>
               <GlassShine r={24} />
               <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
@@ -159,6 +210,30 @@ export function PokedexScreen({ openPokemon }: { openPokemon: (id: number) => vo
           <PokedexTile species={item} cards={dex[item.id] ?? []} width={tileW} onPress={() => openPokemon(item.id)} />
         )}
       />
+      <CardScanner visible={scanning} onClose={() => setScanning(false)} onRead={onRead} />
+      <Modal visible={!!choices} transparent animationType="fade" onRequestClose={() => setChoices(null)}>
+        <Pressable style={styles.choiceBackdrop} onPress={() => setChoices(null)}>
+          <View style={styles.choiceBox}>
+            <Text style={styles.choiceTitle}>Qual destas é a sua carta?</Text>
+            {(choices ?? []).map(({ card, dexIds }) => (
+              <Pressable
+                key={card.id}
+                style={styles.choiceItem}
+                onPress={() => {
+                  setChoices(null);
+                  openPokemon(dexIds[0], card);
+                }}
+              >
+                {card.image ? <Image source={{ uri: `${card.image}/low.webp` }} style={styles.choiceImg} contentFit="cover" /> : null}
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.choiceName}>{card.name}</Text>
+                  <Text style={styles.choiceSub}>{`${setLabel(card.setId)} · ${card.localId}`}</Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
       <MultiPicker
         visible={picker === 'tipo'}
         title="Tipo de carta"
@@ -261,7 +336,26 @@ function CardImage({ card, style }: { card: PokedexCard; style: any }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: 'transparent' },
-  h1: { color: colors.text, fontSize: 34, fontWeight: '900', letterSpacing: -0.5, marginBottom: 12 },
+  h1: { color: colors.text, fontSize: 34, fontWeight: '900', letterSpacing: -0.5 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  scanBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: colors.accentDim,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    minWidth: 120,
+    alignItems: 'center',
+  },
+  scanText: { color: colors.text, fontWeight: '800' },
+  choiceBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 24 },
+  choiceBox: { backgroundColor: colors.sheet, borderRadius: 24, padding: 16, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, gap: 6 },
+  choiceTitle: { color: colors.text, fontSize: 17, fontWeight: '800', marginBottom: 6 },
+  choiceItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
+  choiceImg: { width: 46, height: 64, borderRadius: 6 },
+  choiceName: { color: colors.text, fontWeight: '700' },
+  choiceSub: { color: colors.textDim, fontSize: 12 },
   summary: {
     padding: 16,
     marginBottom: 12,

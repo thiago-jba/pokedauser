@@ -41,3 +41,25 @@ const rawPre = cleanRaw([{ type: 'normal' }, { type: 'reverse' }, { type: 'rever
 const vPre = buildVariants(rawPre, false, new Set(detectSetWideStamps([{ raw: rawPre }])));
 assert.deepEqual(vPre.map((v) => v.label), ['Normal', 'Reverse', 'Reverse Poké Bola', 'Reverse Master Bola']);
 console.log('OK: versões da carta na Pokédex');
+
+// promos: SWSH232 (Charmander), sem barra no rodapé
+import { matchesCardNumber, promoKey } from '../src/pokedex.ts';
+const rp = parseFooter('Illus. kawayoo\nSWSH232 ©2022 Pokémon');
+assert.equal(rp.promo, 'SWSH232');
+assert.equal(parseFooter('SWSH 232').promo, 'SWSH232');
+assert.equal(parseFooter('SVP EN 085').promo, undefined); // "SVP EN 085" tem texto no meio
+assert.equal(parseFooter('SVP 085').promo, 'SVP85');
+const charm = [
+  { id: 'swshp-SWSH232', setId: 'swshp', localId: 'SWSH232', name: 'Charmander' },
+  { id: 'swshp-SWSH092', setId: 'swshp', localId: 'SWSH092', name: 'Charmander' },
+  { id: 'svp-047', setId: 'svp', localId: '047', name: 'Charmander' },
+];
+assert.deepEqual(matchFooter(rp, charm, () => undefined).map((c) => c.id), ['swshp-SWSH232']);
+assert.deepEqual(matchFooter(parseFooter('SVP 47'), charm, () => undefined).map((c) => c.id), ['svp-047']);
+assert.equal(promoKey('SWSH092'), 'SWSH92');
+// busca digitada no campo Carta
+assert.ok(matchesCardNumber('SWSH232', '232'));
+assert.ok(matchesCardNumber('SWSH232', 'swsh232'));
+assert.ok(matchesCardNumber('116', '11'));
+assert.ok(!matchesCardNumber('116', '2'));
+console.log('OK: promos (SWSH232)');

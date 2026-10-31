@@ -150,11 +150,18 @@ export interface FooterRead {
   /** número da carta e total impressos, ex.: 116 e 128 */
   number?: number;
   total?: number;
+  /** código de carta promocional, ex.: "SWSH232", "SM210", "SVP085" (sem zeros à esquerda: "SVP85") */
+  promo?: string;
   /** possíveis códigos de coleção lidos (ex.: "30C", "SCR") */
   codes: string[];
 }
 
-/** Extrai "116/128" e o código da coleção do texto lido pela câmera. */
+/** "SWSH232" / "SWSH 232" / "SVP 085" -> "SWSH232" / "SVP85" (sem espaço nem zeros à esquerda) */
+export const promoKey = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^([A-Z]+)0+(?=\d)/, '$1');
+
+const PROMO_RE = /\b(SWSH|SM|XY|BW|DP|HGSS|SVP|SV|MEP|ME)\s?-?\s?(\d{1,3})\b/;
+
+/** Extrai "116/128" (ou o código de promo, ex.: SWSH232) e o código da coleção do texto lido pela câmera. */
 export function parseFooter(text: string): FooterRead {
   // erros comuns da leitura: letra O no lugar de zero e barra lida como | ou l
   const clean = text
@@ -167,18 +174,27 @@ export function parseFooter(text: string): FooterRead {
   const codes = [...new Set([...text.matchAll(/\b([A-Z]{3}|\d{2}[A-Z]|[A-Z]{2}\d)\b/g)].map((x) => x[1]))].filter(
     (c) => !/^(HP|PV|EX|GX|LV)$/.test(c),
   );
-  return best ? { number: Number(best[1]), total: Number(best[2]), codes } : { codes };
+  const promo = !best ? clean.toUpperCase().match(PROMO_RE) : null;
+  if (best) return { number: Number(best[1]), total: Number(best[2]), codes };
+  if (promo) return { promo: promoKey(promo[1] + promo[2]), number: Number(promo[2]), codes };
+  return { codes };
 }
 
 /**
  * Cartas do Pokémon que batem com o rodapé lido.
- * Confere o número da carta e o total oficial da coleção; se houver código lido, ele desempata.
+ * Promo: confere o código (SWSH232). Demais: número da carta e total oficial; o código lido desempata.
  */
 export function matchFooter(
   read: FooterRead,
   cards: PokemonCardBrief[],
   setInfo: (setId: string) => { official?: number; code?: string } | undefined,
 ): PokemonCardBrief[] {
+  if (read.promo) {
+    const exact = cards.filter((c) => promoKey(c.localId) === read.promo);
+    if (exact.length) return exact;
+    // promos da era Escarlate e Violeta são numeradas sem prefixo (svp-085)
+    return cards.filter((c) => /^svp$|^mep$/i.test(c.setId) && Number(c.localId) === read.number);
+  }
   if (read.number === undefined) return [];
   const byNumber = cards.filter((c) => /^\d+$/.test(c.localId) && Number(c.localId) === read.number);
   const byTotal = byNumber.filter((c) => setInfo(c.setId)?.official === read.total);
@@ -188,6 +204,54 @@ export function matchFooter(
     return code && read.codes.includes(code.toUpperCase());
   });
   return withCode.length ? withCode : pool;
+}
+
+/** A busca digitada bate com o número da carta? "232" acha "SWSH232"; "116" acha "116". */
+export function matchesCardNumber(localId: string, typed: string): boolean {
+  const t = typed.trim().replace(/^#/, '');
+  if (!t) return true;
+  if (/^\d+$/.test(t)) {
+    const digits = localId.replace(/\D/g, '');
+    return digits !== '' && String(Number(digits)).startsWith(String(Number(t)));
+  }
+  return promoKey(localId).startsWith(promoKey(t));
+}
+
+/**
+ * Identifica uma carta qualquer pelo rodapé lido (usado na câmera da tela principal da Pokédex).
+ * Busca na TCGdex todas as cartas com aquele número e confere o total oficial / código.
+ */
+export async function identifyCard(
+  read: FooterRead,
+  setInfo: (setId: string) => { official?: number; code?: string } | undefined,
+): Promise<{ card: PokemonCardBrief; dexIds: number[] }[]> {
+  if (read.number === undefined && !read.promo) return [];
+  const ids = read.promo
+    ? [read.promo, read.promo.replace(/(\d+)$/, (d) => d.padStart(3, '0'))]
+    : [String(read.number), String(read.number).padStart(3, '0'), String(read.number).padStart(2, '0')];
+  const seen = new Set<string>();
+  const found: PokemonCardBrief[] = [];
+  for (const id of [...new Set(ids)]) {
+    try {
+      const r = await fetch(`${TCG}/cards?localId=eq:${encodeURIComponent(id)}`);
+      const list: any[] = r.ok ? await r.json() : [];
+      for (const c of list) {
+        if (seen.has(c.id)) continue;
+        seen.add(c.id);
+        const localId = String(c.localId);
+        found.push({ id: c.id, localId, setId: String(c.id).slice(0, String(c.id).length - localId.length - 1), name: c.name, image: c.image });
+      }
+    } catch {}
+  }
+  const matched = matchFooter(read, found, setInfo).slice(0, 6);
+  const out: { card: PokemonCardBrief; dexIds: number[] }[] = [];
+  for (const card of matched) {
+    try {
+      const d = await (await fetch(`${TCG}/cards/${encodeURIComponent(card.id)}`)).json();
+      if (Array.isArray(d?.dexId) && d.dexId.length) out.push({ card, dexIds: d.dexId });
+    } catch {}
+  }
+  return out;
 }
 
 // ---------- detalhes de uma carta (versões, raridade, preço) ----------
