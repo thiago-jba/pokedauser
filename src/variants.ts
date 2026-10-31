@@ -17,7 +17,7 @@ export const CATEGORY_LABELS: Record<VariantCategory, string> = {
   reverse: 'Reverse Foil',
   reverse_especial: 'Reverse Especial',
   primeira_edicao: '1ª Edição',
-  promo: 'Promo / Carimbada',
+  promo: 'Promo / Extra',
   outras: 'Outras',
 };
 
@@ -231,24 +231,47 @@ export function buildVariants(
   raw: ApiVariantDetailed[],
   isPromoSet: boolean,
   ignoreStamps: ReadonlySet<string> = new Set(),
-  rarity?: string,
+  _rarity?: string,
 ): CardVariant[] {
   const seen = new Set<string>();
-  const out: CardVariant[] = [];
+  const pairs: { v: ApiVariantDetailed; c: CardVariant }[] = [];
   for (const v of raw.length ? raw : [{ type: 'normal' }]) {
     const c = classifyDetailed(v, isPromoSet, ignoreStamps);
     if (seen.has(c.key)) continue;
     seen.add(c.key);
-    out.push(c);
+    pairs.push({ v, c });
   }
+  if (!isPromoSet) markBaseVersion(pairs, ignoreStamps);
+  return pairs.map((p) => p.c);
+}
 
-  // Raridade Rara Dupla para cima: essas cartas já saem brilhantes, então a versão base
-  // (que a fonte cadastra como "Holo") conta como Normal. As outras variantes continuam iguais.
-  if (isHighRarity(rarity) && !out.some((c) => c.category === 'normal')) {
-    const base = out.find((c) => c.category === 'holo' && c.finish === 'holo' && !c.custom);
-    if (base) Object.assign(base, { category: 'normal' as const, label: 'Normal', finish: 'normal' as const });
-  }
-  return out;
+/**
+ * Toda carta tem uma versão BASE (a que se coleciona) e o resto é extra:
+ *  1. se existe a versão Normal simples, ela é a base;
+ *  2. se não existe, a Holo simples é a base e conta como Normal (Raras, Rara Dupla, Ilustrações…);
+ *  3. se a carta só tem uma versão (ex.: Hiper Rara dourada), ela é a base;
+ *  4. qualquer outra versão que não seja Reverse vai para "Promo / Extra"
+ *     (ex.: Holo de uma carta que já tem Normal, Cosmos, Liga, carimbos).
+ * Reverse, Reverse Especial e 1ª Edição não mudam. As chaves não mudam (marcações continuam valendo).
+ */
+function markBaseVersion(pairs: { v: ApiVariantDetailed; c: CardVariant }[], ignoreStamps: ReadonlySet<string>) {
+  const candidates = pairs.filter(
+    ({ v, c }) => c.category !== 'reverse' && c.category !== 'reverse_especial' && c.category !== 'primeira_edicao' && !v.custom && !v.promo,
+  );
+  if (!candidates.length) return;
+  const effStamps = (v: ApiVariantDetailed) => (v.stamp ?? []).filter((x) => !ignoreStamps.has(x.toLowerCase()));
+  const isPlain = (v: ApiVariantDetailed, type: string) =>
+    (v.type ?? 'normal').toLowerCase() === type && !v.foil && !effStamps(v).length && (!v.size || v.size === 'standard') && !v.subtype;
+  const unstamped = candidates.filter(({ v }) => !effStamps(v).length && (!v.size || v.size === 'standard'));
+  const base =
+    candidates.find(({ v }) => isPlain(v, 'normal')) ??
+    candidates.find(({ v }) => isPlain(v, 'holo')) ??
+    (unstamped.length === 1 ? unstamped[0] : undefined);
+  if (!base) return;
+
+  const foil = base.v.foil ? FOIL_PT[base.v.foil.toLowerCase()] ?? base.v.foil : '';
+  Object.assign(base.c, { category: 'normal', label: foil ? `Normal ${foil}` : 'Normal', finish: foil ? 'special' : 'normal' });
+  for (const p of candidates) if (p !== base) p.c.category = 'promo';
 }
 
 /** Raridades de Rara Dupla para cima (nomes em inglês da fonte de dados). */

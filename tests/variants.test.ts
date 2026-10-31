@@ -24,7 +24,7 @@ assert.equal(exeggcute[2].label, 'Reverse Poké Bola');
 
 // Base Set antigo via true/false
 const base = buildVariants(cleanRaw(undefined, { normal: false, holo: true, reverse: false, firstEdition: true }), false);
-assert.deepEqual(base.map((v) => v.category), ['holo', 'primeira_edicao']);
+assert.deepEqual(base.map((v) => v.category), ['normal', 'primeira_edicao']); // Holo ilimitada é a base
 assert.equal(base[1].label, '1ª Ed. Holo');
 
 // Carimbo de evento continua sendo promo
@@ -85,19 +85,29 @@ assert.equal(allCards(fakeSet).filter((c) => c.localId === 'R').length, 1);
 assert.ok(allCards(fakeSet).find((c) => c.localId === 'R')!.imageFull!.includes('me55%2FR.png'));
 console.log('OK: cartas extras');
 
-// ---- Rara Dupla para cima: versão base conta como Normal; variantes continuam iguais ----
-import { isHighRarity } from '../src/variants.ts';
-assert.ok(isHighRarity('Rara Dupla') && isHighRarity('Ilustração Rara Especial') && isHighRarity('Double rare'));
-assert.ok(!isHighRarity('Rara Holo') && !isHighRarity('Comum') && !isHighRarity(undefined));
-const ign = new Set(['30th-anniversary']);
-// Mew ex (Rara Dupla) só cadastrado como holo -> Normal (mesma chave: as marcações continuam)
-const mewEx = buildVariants([{ type: 'holo', stamp: ['30th-anniversary'] }], false, ign, 'Rara Dupla');
+// ---- Versão base x extras (casos reais da Coroa Estelar, sv07) ----
+const cats = (raw: any[], ign: Set<string> = new Set()) => buildVariants(raw, false, ign).map((v) => `${v.category}:${v.label}`);
+// 003 (Rara): Normal + Holo + Reverse -> Holo é extra
+assert.deepEqual(cats([{ type: 'holo' }, { type: 'reverse' }, { type: 'normal' }]), ['promo:Holo', 'reverse:Reverse', 'normal:Normal']);
+// 001 (Rara Dupla): só Holo (+ carimbadas) -> Holo vira Normal
+assert.deepEqual(cats([{ type: 'holo' }, { type: 'holo', stamp: ['set-logo'] }]), ['normal:Normal', 'promo:Holo Carimbo da Coleção']);
+// 044 (Rara): Holo + Reverse -> Holo é a base
+assert.deepEqual(cats([{ type: 'holo' }, { type: 'reverse' }]), ['normal:Normal', 'reverse:Reverse']);
+// 076: Holo + Reverse + Holo Cosmos -> Cosmos é extra
+assert.deepEqual(cats([{ type: 'holo' }, { type: 'reverse' }, { type: 'holo', foil: 'cosmos' }]), ['normal:Normal', 'reverse:Reverse', 'promo:Holo Cosmos']);
+// 096: Reverse + Holo + Normal Liga -> Holo é a base, Liga é extra
+assert.deepEqual(cats([{ type: 'reverse' }, { type: 'holo' }, { type: 'normal', foil: 'league' }]), ['reverse:Reverse', 'normal:Normal', 'promo:Normal Liga']);
+// 174 (Hiper Rara): só Holo Ouro -> é a base
+assert.deepEqual(cats([{ type: 'holo', foil: 'gold' }]), ['normal:Normal Ouro']);
+// Comum: Normal + Reverse (+ carimbada)
+assert.deepEqual(cats([{ type: 'normal' }, { type: 'reverse' }, { type: 'normal', stamp: ['set-logo'] }]), ['normal:Normal', 'reverse:Reverse', 'promo:Normal Carimbo da Coleção']);
+// Poké Bola / Master Bola continuam Reverse Especial
+assert.deepEqual(cats([{ type: 'normal' }, { type: 'reverse' }, { type: 'reverse', foil: 'pokeball' }]), ['normal:Normal', 'reverse:Reverse', 'reverse_especial:Reverse Poké Bola']);
+// 30 Anos: carimbo da coleção é ignorado; Mew ex (Rara Dupla, só holo) vira Normal com a mesma chave
+const mewEx = buildVariants([{ type: 'holo', stamp: ['30th-anniversary'] }], false, new Set(['30th-anniversary']));
 assert.deepEqual(mewEx.map((v) => [v.category, v.label, v.key]), [['normal', 'Normal', 'holo||||30th-anniversary']]);
-// SIR com variante especial: só a base vira Normal
-const sir = buildVariants([{ type: 'holo' }, { type: 'holo', foil: 'cosmos', promo: true }], false, new Set(), 'Ilustração Rara Especial');
-assert.deepEqual(sir.map((v) => v.category), ['normal', 'promo']);
-// Rara Holo comum continua Holo
-assert.equal(buildVariants([{ type: 'holo' }], false, new Set(), 'Rara Holo')[0].category, 'holo');
-// carta alta que já tem Normal cadastrada: nada muda
-assert.deepEqual(buildVariants([{ type: 'normal' }, { type: 'holo' }], false, new Set(), 'Ultra Rara').map((v) => v.category), ['normal', 'holo']);
-console.log('OK: raridade alta como Normal');
+// Eevee 116: Normal + Cosmos (promo) continua igual
+assert.deepEqual(cats([{ type: 'normal', stamp: ['30th-anniversary'] }, { type: 'holo', foil: 'cosmos', stamp: ['30th-anniversary'], promo: true }], new Set(['30th-anniversary'])), ['normal:Normal', 'promo:Holo Cosmos']);
+// variante adicionada à mão não vira base nem muda
+assert.deepEqual(cats([{ type: 'normal' }, { type: 'holo', custom: true }]), ['normal:Normal', 'holo:Holo']);
+console.log('OK: versão base x extras');
