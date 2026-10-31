@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchAllSets, fetchFullSet, fetchSetInfo, SetSummary } from '../api';
 import { applySavedFilters, formatPct, progress, setEntries } from '../collection';
 import { CollectionRow, CollectionTile } from '../components/CollectionCards';
+import { SummaryCard } from '../components/SummaryCard';
 import { eraPt, eraRank, HOME_SORTS, normalizeSort, sortLabel } from '../eras';
 import { SetLogo } from '../components/SetLogo';
 import { BusyModal, IconButton } from '../components/ui';
@@ -90,6 +91,23 @@ export function HomeScreen({ openSet }: { openSet: (setId: string) => void }) {
         return { era, list: sorted, owned, total };
       });
   }, [data.collections, sort, stats]);
+
+  // Resumo geral: soma de todas as coleções, cada uma com o seu último filtro
+  const summary = useMemo(() => {
+    let owned = 0;
+    let total = 0;
+    let complete = 0;
+    let filteredCount = 0;
+    for (const c of data.collections) {
+      const st = stats[c.setId];
+      if (!st) continue;
+      owned += st.owned;
+      total += st.total;
+      if (st.total > 0 && st.owned >= st.total) complete++;
+      if (st.filtered) filteredCount++;
+    }
+    return { owned, total, complete, filteredCount };
+  }, [data.collections, stats]);
 
   // Linhas da lista: cabeçalho da era + coleções (em pares na visualização em quadros)
   type HomeRow =
@@ -327,6 +345,17 @@ export function HomeScreen({ openSet }: { openSet: (setId: string) => void }) {
           data={rows}
           keyExtractor={(r) => (r.kind === 'era' ? `era-${r.era}` : r.kind === 'tiles' ? r.key : r.item.setId)}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 24, gap: view === 'lista' ? 8 : 12 }}
+          ListHeaderComponent={
+            data.collections.length > 0 ? (
+              <SummaryCard
+                owned={summary.owned}
+                total={summary.total}
+                collections={data.collections.length}
+                complete={summary.complete}
+                filteredCount={summary.filteredCount}
+              />
+            ) : null
+          }
           ListEmptyComponent={
             <View style={styles.emptyBox}>
               <Text style={styles.emptyTitle}>Comece sua coleção</Text>
