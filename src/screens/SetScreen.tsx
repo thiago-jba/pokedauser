@@ -93,19 +93,40 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
 
   // Base da contagem: tipo + raridade + texto (o filtro Tenho/Faltam só muda o que aparece na tela,
   // senão "Tenho" daria sempre 100% e "Faltam" sempre 0%).
-  const base = useMemo(
-    () =>
-      saved.list.filter((e) => {
-        if (text.trim()) {
-          const t = text.trim().replace(/^#/, '');
-          if (/^\d+$/.test(t)) {
-            if (String(parseInt(e.card.localId, 10)) !== String(parseInt(t, 10)) && e.card.localId !== t) return false;
-          } else if (!matchesQuery(`${e.card.name} ${e.variant.label}`, text)) return false;
-        }
-        return true;
-      }),
-    [saved, text],
+  const matchText = useCallback(
+    (e: Entry) => {
+      if (!text.trim()) return true;
+      const t = text.trim().replace(/^#/, '');
+      if (/^\d+$/.test(t)) return String(parseInt(e.card.localId, 10)) === String(parseInt(t, 10)) || e.card.localId === t;
+      return matchesQuery(`${e.card.name} ${e.variant.label}`, text);
+    },
+    [text],
   );
+  const base = useMemo(() => saved.list.filter(matchText), [saved, matchText]);
+
+  // Números ao lado de cada filtro: consideram os OUTROS filtros aplicados.
+  // Ex.: com 5 raridades escolhidas, o "Normal" mostra quantas Normais existem nessas raridades.
+  const rarityOk = (e: Entry) => !raritySet.size || raritySet.has(e.card.rarity ?? 'Sem raridade');
+  const catOk = (e: Entry) => !catSet.size || catSet.has(e.variant.category);
+  const chipCounts = useMemo(() => {
+    const m = new Map<VariantCategory, number>();
+    let all = 0;
+    for (const e of allEntries) {
+      if (!rarityOk(e) || !matchText(e)) continue;
+      all++;
+      m.set(e.variant.category, (m.get(e.variant.category) ?? 0) + 1);
+    }
+    return { m, all };
+  }, [allEntries, raritySet, matchText]); // eslint-disable-line react-hooks/exhaustive-deps
+  const rarityCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const e of allEntries) {
+      if (!catOk(e) || !matchText(e)) continue;
+      const r = e.card.rarity ?? 'Sem raridade';
+      m.set(r, (m.get(r) ?? 0) + 1);
+    }
+    return m;
+  }, [allEntries, catSet, matchText]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = useMemo(
     () =>
@@ -272,12 +293,12 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
 
       <Text style={styles.label}>Tipo de carta · pode escolher vários</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16 }} style={{ marginBottom: 10 }}>
-        <Chip label="Todas" count={allEntries.length} active={catSet.size === 0} onPress={() => setCategoryFilter(setId, [])} />
+        <Chip label="Todas" count={chipCounts.all} active={catSet.size === 0} onPress={() => setCategoryFilter(setId, [])} />
         {CATEGORY_ORDER.filter((c) => catCounts.has(c)).map((c) => (
           <Chip
             key={c}
             label={CATEGORY_LABELS[c]}
-            count={catCounts.get(c)}
+            count={chipCounts.m.get(c) ?? 0}
             active={catSet.has(c)}
             check
             color={CATEGORY_COLOR[c]}
@@ -362,7 +383,7 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
             <ScrollView>
               {rarities.map((r) => {
                 const on = raritySet.has(r);
-                const n = allEntries.filter((e) => (e.card.rarity ?? 'Sem raridade') === r).length;
+                const n = rarityCounts.get(r) ?? 0;
                 return (
                   <Pressable key={r} style={styles.pickerItem} onPress={() => toggleRarity(r)}>
                     <View style={[styles.checkbox, on && styles.checkboxOn]}>{on ? <Text style={styles.checkboxTick}>✓</Text> : null}</View>
