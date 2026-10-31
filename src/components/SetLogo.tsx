@@ -23,11 +23,18 @@ export function SetLogo({
   logo,
   symbol,
   style,
+  fit = 'contain',
+  blurRadius,
+  hideFallbackText,
 }: {
   setId: string;
   logo?: string;
   symbol?: string;
   style: StyleProp<ViewStyle>;
+  fit?: 'contain' | 'cover';
+  blurRadius?: number;
+  /** quando é só o fundo desfocado, não mostra a sigla se não houver imagem */
+  hideFallbackText?: boolean;
 }) {
   const fallbackText = setId;
   const candidates = useMemo(() => {
@@ -43,6 +50,7 @@ export function SetLogo({
   const [idx, setIdx] = useState(0);
 
   if (idx >= candidates.length) {
+    if (hideFallbackText) return null;
     return (
       <View style={[style, { alignItems: 'center', justifyContent: 'center' }]}>
         <Text style={{ color: colors.textDim, fontWeight: '800', fontSize: 16 }}>{fallbackText.toUpperCase()}</Text>
@@ -54,7 +62,8 @@ export function SetLogo({
       <Image
         source={{ uri: candidates[idx] }}
         style={{ width: '100%', height: '100%' }}
-        contentFit="contain"
+        contentFit={fit}
+        blurRadius={blurRadius}
         cachePolicy="disk"
         onError={() => setIdx((i) => i + 1)}
       />

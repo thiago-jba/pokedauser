@@ -25,6 +25,8 @@ export interface AppData {
   custom: Record<string, Record<string, ApiVariantDetailed[]>>;
   /** setId -> último filtro de raridade usado */
   filters: Record<string, { rarities?: string[]; categories?: string[] }>;
+  /** ordenação escolhida na tela inicial */
+  homeSort?: string;
 }
 
 export const emptyData = (): AppData => ({ version: 1, collections: [], owned: {}, custom: {}, filters: {} });
@@ -57,7 +59,14 @@ function ensureDirs() {
 export function loadData(): AppData {
   const d = readJson<AppData>(mainFile());
   if (!d || !Array.isArray(d.collections)) return emptyData();
-  return { version: 1, collections: d.collections, owned: migrateOwned(d.owned), custom: d.custom ?? {}, filters: d.filters ?? {} };
+  return {
+    version: 1,
+    collections: d.collections,
+    owned: migrateOwned(d.owned),
+    custom: d.custom ?? {},
+    filters: d.filters ?? {},
+    homeSort: d.homeSort,
+  };
 }
 
 /** Versões até 31/10 guardavam só a lista do que eu tenho: tudo vira carta nacional (Brasil). */
@@ -178,5 +187,6 @@ export function restoreBackup(b: BackupFile) {
     owned: migrateOwned(b.data.owned),
     custom: b.data.custom ?? {},
     filters: b.data.filters ?? {},
+    homeSort: b.data.homeSort,
   });
 }

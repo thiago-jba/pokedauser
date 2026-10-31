@@ -49,3 +49,29 @@ export function formatPct(pct: number): string {
   const v = Math.floor(pct * 10) / 10;
   return `${v.toFixed(v % 1 ? 1 : 0).replace('.', ',')}%`;
 }
+
+export interface SavedFilters {
+  categories?: string[];
+  rarities?: string[];
+}
+
+/**
+ * Aplica os filtros salvos da coleção (tipo de carta e raridade).
+ * Escolhas que não existem mais na coleção são ignoradas.
+ * Usado tanto na tela da coleção quanto na tela inicial, para os números baterem.
+ */
+export function applySavedFilters(entries: Entry[], f?: SavedFilters) {
+  const cats = new Set(entries.map((e) => e.variant.category as string));
+  const rars = new Set(entries.map((e) => e.card.rarity ?? 'Sem raridade'));
+  const catSet = new Set((f?.categories ?? []).filter((c) => cats.has(c)));
+  const raritySet = new Set((f?.rarities ?? []).filter((r) => rars.has(r)));
+  const list =
+    catSet.size || raritySet.size
+      ? entries.filter(
+          (e) =>
+            (!catSet.size || catSet.has(e.variant.category)) &&
+            (!raritySet.size || raritySet.has(e.card.rarity ?? 'Sem raridade')),
+        )
+      : entries;
+  return { list, catSet, raritySet, active: catSet.size > 0 || raritySet.size > 0 };
+}

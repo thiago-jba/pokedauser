@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchFullSet, StoredCard, StoredSet } from '../api';
-import { allCards, Entry, formatPct, ownedKey, progress, setEntries } from '../collection';
+import { allCards, applySavedFilters, Entry, formatPct, ownedKey, progress, setEntries } from '../collection';
 import { SetLogo } from '../components/SetLogo';
 import { CardDetail } from '../components/CardDetail';
 import { CardTile } from '../components/CardTile';
@@ -65,18 +65,16 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
   }, [allEntries]);
 
   const rarities = useMemo(() => [...new Set((set ? allCards(set) : []).map((c) => c.rarity ?? 'Sem raridade'))], [set]);
-  // ignora tipos salvos que não existem nesta coleção
-  const catSet = useMemo(() => new Set(selectedCategories.filter((c) => catCounts.has(c))), [selectedCategories, catCounts]);
-  // ignora raridades salvas que não existem mais nesta coleção
-  const raritySet = useMemo(() => new Set(selectedRarities.filter((r) => rarities.includes(r))), [selectedRarities, rarities]);
+  // tipo + raridade salvos (mesma regra usada na contagem da tela inicial)
+  const saved = useMemo(() => applySavedFilters(allEntries, data.filters[setId]), [allEntries, data.filters, setId]);
+  const catSet = saved.catSet as Set<VariantCategory>;
+  const raritySet = saved.raritySet;
 
   // Base da contagem: tipo + raridade + texto (o filtro Tenho/Faltam só muda o que aparece na tela,
   // senão "Tenho" daria sempre 100% e "Faltam" sempre 0%).
   const base = useMemo(
     () =>
-      allEntries.filter((e) => {
-        if (catSet.size && !catSet.has(e.variant.category)) return false;
-        if (raritySet.size && !raritySet.has(e.card.rarity ?? 'Sem raridade')) return false;
+      saved.list.filter((e) => {
         if (text.trim()) {
           const t = text.trim().replace(/^#/, '');
           if (/^\d+$/.test(t)) {
@@ -85,7 +83,7 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
         }
         return true;
       }),
-    [allEntries, catSet, raritySet, text],
+    [saved, text],
   );
 
   const filtered = useMemo(

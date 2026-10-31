@@ -21,6 +21,7 @@ interface Store {
   removeCustomVariant: (setId: string, cardId: string, key: string) => void;
   setRarityFilter: (setId: string, rarities: string[]) => void;
   setCategoryFilter: (setId: string, categories: string[]) => void;
+  setHomeSort: (sort: string) => void;
   reload: () => void;
 }
 
@@ -138,6 +139,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setData((d) => ({ ...d, filters: { ...d.filters, [setId]: { ...d.filters[setId], categories } } }));
   }, []);
 
+  const setHomeSort = useCallback((homeSort: string) => setData((d) => ({ ...d, homeSort })), []);
+
   const reload = useCallback(() => setData(loadData()), []);
 
   const value = useMemo(
@@ -154,9 +157,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       removeCustomVariant,
       setRarityFilter,
       setCategoryFilter,
+      setHomeSort,
       reload,
     }),
-    [data, isOwned, ownedCountry, setCountry, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, setCategoryFilter, reload],
+    [data, isOwned, ownedCountry, setCountry, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, setCategoryFilter, setHomeSort, reload],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
