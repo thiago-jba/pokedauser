@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import React, { memo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { imageUrl, StoredCard } from '../api';
+import { cardImage, StoredCard } from '../api';
 import { countryName, flagEmoji } from '../countries';
 import { CARD_RATIO, colors, finishColors } from '../theme';
 import type { CardVariant } from '../variants';
@@ -21,7 +21,7 @@ function CardTileBase({ card, variant, country, width, onToggle, onOpen }: Props
   const fc = finishColors[variant.finish];
   const h = width * CARD_RATIO;
   const [failed, setFailed] = useState(false);
-  const uri = failed ? undefined : imageUrl(card.image, 'low');
+  const uri = failed ? undefined : cardImage(card, 'low');
 
   return (
     <Pressable

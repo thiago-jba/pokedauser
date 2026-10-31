@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import React, { useEffect, useState } from 'react';
 import { Alert, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { imageUrl, StoredCard, StoredSet } from '../api';
+import { cardImage, StoredCard, StoredSet } from '../api';
 import { cardVariants, ownedKey } from '../collection';
 import { countryName, flagEmoji } from '../countries';
 import { CountryPicker } from './CountryPicker';
@@ -83,10 +83,10 @@ export function CardDetail({ set, card, onClose }: { set: StoredSet; card: Store
       <Pressable style={styles.backdrop} onPress={close}>
         <Pressable style={styles.sheet} onPress={() => {}}>
           <ScrollView contentContainerStyle={{ alignItems: 'center', padding: 16 }}>
-            {card.image ? (
+            {cardImage(card, 'high') ? (
               <Image
-                source={{ uri: imageUrl(card.image, 'high') }}
-                placeholder={{ uri: imageUrl(card.image, 'low') }}
+                source={{ uri: cardImage(card, 'high') }}
+                placeholder={{ uri: cardImage(card, 'low') }}
                 style={{ width: imgW, height: imgW * CARD_RATIO, borderRadius: 12 }}
                 contentFit="contain"
                 cachePolicy="disk"

@@ -25,8 +25,11 @@ export function cardVariants(set: StoredSet, card: StoredCard, custom?: CustomFo
 export function allCards(set: StoredSet): StoredCard[] {
   const extras = EXTRA_CARDS[set.id];
   if (!extras) return set.cards;
+  const byId = new Map(extras.map((c) => [c.id, c]));
+  // carta que já veio da API mas ainda sem foto: usa a foto conhecida
+  const api = set.cards.map((c) => (!c.image && byId.get(c.id)?.imageFull ? { ...c, imageFull: byId.get(c.id)!.imageFull } : c));
   const have = new Set(set.cards.map((c) => c.id));
-  return [...set.cards, ...extras.filter((c) => !have.has(c.id))];
+  return [...api, ...extras.filter((c) => !have.has(c.id))];
 }
 
 export function setEntries(set: StoredSet, custom?: CustomForSet): Entry[] {

@@ -81,4 +81,6 @@ assert.equal(setEntries(fakeSet).length, 2 + 1 + 3, 'Eevee x2 + Mew ex + 3 Mew R
 // se a API passar a ter o Mew R, não duplica
 fakeSet.cards.push({ id: '30th-R', localId: 'R', name: 'Mew', raw: [{ type: 'holo' }] });
 assert.equal(allCards(fakeSet).filter((c) => c.localId === 'R').length, 1);
+// ...e continua com a foto enviada enquanto a TCGdex não tiver a imagem
+assert.ok(allCards(fakeSet).find((c) => c.localId === 'R')!.imageFull!.includes('me55%2FR.png'));
 console.log('OK: cartas extras');

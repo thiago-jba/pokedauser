@@ -14,8 +14,8 @@ const mewRgb = (letter: 'R' | 'G' | 'B'): StoredCard => ({
   id: `30th-${letter}`,
   localId: letter,
   name: 'Mew',
-  // a TCGdex ainda não publicou a foto; se publicar neste endereço, aparece sozinha
-  image: `https://assets.tcgdex.net/en/me/30th/${letter}`,
+  // a TCGdex ainda não publicou a foto: usa a do DexTCG (enviada pelo usuário)
+  imageFull: `https://img.dextcg.com/https://static.dextcg.com/cards/me55%2F${letter}.png`,
   rarity: rarityPt('RGB Rare'),
   category: 'Pokemon',
   raw: [{ type: 'holo' }],

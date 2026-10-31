@@ -26,6 +26,8 @@ export interface StoredCard {
   nameEn?: string;
   /** URL base da imagem (sem /low.webp); prefere a versão em português */
   image?: string;
+  /** endereço completo de uma foto de outra fonte (usado quando a TCGdex ainda não tem a imagem) */
+  imageFull?: string;
   rarity?: string;
   category?: string;
   /** variantes no formato da API (a classificação é feita na hora de mostrar) */
@@ -211,5 +213,9 @@ export async function fetchSetInfo(setId: string): Promise<{ releaseDate?: strin
 
 export const imageUrl = (base: string | undefined, quality: 'low' | 'high') =>
   base ? `${base}/${quality}.webp` : undefined;
+
+/** Foto da carta: a da TCGdex, ou um endereço completo de outra fonte. */
+export const cardImage = (card: { image?: string; imageFull?: string }, quality: 'low' | 'high') =>
+  card.image ? imageUrl(card.image, quality) : card.imageFull;
 
 export const assetUrl = (base: string | undefined) => (base ? `${base}.webp` : undefined);
