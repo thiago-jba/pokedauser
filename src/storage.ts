@@ -39,6 +39,22 @@ export interface AppData {
   settings?: AppSettings;
   /** setId -> modo da coleção e variações incluídas/ocultadas pelo usuário */
   prefs?: Record<string, { mode?: 'principal' | 'especial'; included?: string[]; excluded?: string[] }>;
+  /** Pokédex: número do Pokémon -> cartas que tenho dele */
+  pokedex?: Record<string, PokedexCard[]>;
+}
+
+export interface PokedexCard {
+  /** identificador único desta entrada (posso ter a mesma carta duas vezes) */
+  uid: string;
+  cardId: string;
+  setId: string;
+  setName: string;
+  localId: string;
+  name: string;
+  /** URL base da imagem da TCGdex (sem /low.webp) */
+  image?: string;
+  official?: number;
+  addedAt: string;
 }
 
 export interface AppSettings {
@@ -87,6 +103,7 @@ export function loadData(): AppData {
     collapsedEras: d.collapsedEras ?? [],
     settings: d.settings ?? {},
     prefs: d.prefs ?? {},
+    pokedex: d.pokedex ?? {},
   };
 }
 
@@ -213,5 +230,6 @@ export function restoreBackup(b: BackupFile) {
     collapsedEras: b.data.collapsedEras ?? [],
     settings: b.data.settings ?? {},
     prefs: b.data.prefs ?? {},
+    pokedex: b.data.pokedex ?? {},
   });
 }

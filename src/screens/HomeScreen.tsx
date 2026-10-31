@@ -20,6 +20,7 @@ import { CollectionRow, CollectionTile } from '../components/CollectionCards';
 import { GlassShine } from '../components/Glass';
 import { EvolutionPanel } from '../components/EvolutionPanel';
 import { SummaryCard } from '../components/SummaryCard';
+import { TAB_BAR_SPACE } from '../components/TabBar';
 import type { Basket } from '../evolution';
 import {
   cachedRates,
@@ -391,7 +392,7 @@ export function HomeScreen({ openSet, openSettings }: { openSet: (setId: string)
           data={results}
           keyExtractor={(s) => s.id}
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 24 }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + TAB_BAR_SPACE }}
           ListEmptyComponent={
             <Pressable onPress={setsError ? loadSets : undefined}>
               <Text style={styles.empty}>
@@ -419,7 +420,7 @@ export function HomeScreen({ openSet, openSettings }: { openSet: (setId: string)
           key="colecoes"
           data={rows}
           keyExtractor={(r) => (r.kind === 'era' ? `era-${r.era}` : r.kind === 'tiles' ? r.key : r.item.setId)}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 24, gap: view === 'lista' ? 8 : 12 }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + TAB_BAR_SPACE, gap: view === 'lista' ? 8 : 12 }}
           ListHeaderComponent={
             data.collections.length > 0 ? (
               <SummaryCard

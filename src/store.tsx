@@ -3,7 +3,7 @@ import type { StoredSet } from './api';
 import { allPossibleKeys, ownedKey } from './collection';
 import type { SetMode, SetPrefs } from './collection';
 import { deleteSetPrices } from './prices';
-import { AppData, CollectionEntry, deleteSet, loadData, saveData, saveSet } from './storage';
+import { AppData, CollectionEntry, deleteSet, loadData, PokedexCard, saveData, saveSet } from './storage';
 import { DEFAULT_COUNTRY } from './countries';
 import { ApiVariantDetailed, variantKey } from './variants';
 
@@ -30,6 +30,8 @@ interface Store {
   includeVariant: (setId: string, key: string) => void;
   excludeVariant: (setId: string, key: string) => void;
   setHomeSort: (sort: string) => void;
+  addPokedexCard: (dexId: number, card: Omit<PokedexCard, 'uid' | 'addedAt'>) => void;
+  removePokedexCard: (dexId: number, uid: string) => void;
   /** país padrão ao marcar uma carta (Configurações) */
   defaultCountry: string;
   setDefaultCountry: (code: string) => void;
@@ -190,6 +192,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const setCardSort = useCallback((setId: string, sort: string) => {
     setData((d) => ({ ...d, filters: { ...d.filters, [setId]: { ...d.filters[setId], sort } } }));
   }, []);
+  const addPokedexCard = useCallback((dexId: number, card: Omit<PokedexCard, 'uid' | 'addedAt'>) => {
+    const entry: PokedexCard = { ...card, uid: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, addedAt: new Date().toISOString() };
+    setData((d) => ({ ...d, pokedex: { ...(d.pokedex ?? {}), [dexId]: [...(d.pokedex?.[dexId] ?? []), entry] } }));
+  }, []);
+  const removePokedexCard = useCallback((dexId: number, uid: string) => {
+    setData((d) => ({ ...d, pokedex: { ...(d.pokedex ?? {}), [dexId]: (d.pokedex?.[dexId] ?? []).filter((c) => c.uid !== uid) } }));
+  }, []);
   const setHomeSort = useCallback((homeSort: string) => setData((d) => ({ ...d, homeSort })), []);
   const defaultCountry = data.settings?.defaultCountry ?? DEFAULT_COUNTRY;
   const setDefaultCountry = useCallback(
@@ -233,6 +242,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       includeVariant,
       excludeVariant,
       setHomeSort,
+      addPokedexCard,
+      removePokedexCard,
       defaultCountry,
       setDefaultCountry,
       setHomeView,
@@ -240,7 +251,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       patchCollection,
       reload,
     }),
-    [data, isOwned, ownedCountry, setCountry, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, setCategoryFilter, setCardSort, prefsFor, setSetMode, includeVariant, excludeVariant, setHomeSort, defaultCountry, setDefaultCountry, setHomeView, toggleEra, patchCollection, reload],
+    [data, isOwned, ownedCountry, setCountry, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, setCategoryFilter, setCardSort, prefsFor, setSetMode, includeVariant, excludeVariant, setHomeSort, addPokedexCard, removePokedexCard, defaultCountry, setDefaultCountry, setHomeView, toggleEra, patchCollection, reload],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

@@ -1,0 +1,288 @@
+import { Image } from 'expo-image';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { fetchAllSets, SetSummary } from '../api';
+import { fetchPokemonCards, fetchSetCards, matchFooter, parseFooter, PokemonCardBrief } from '../pokedex';
+import { loadSetsCacheAnyAge, saveSetsCache } from '../storage';
+import { useStore } from '../store';
+import { CARD_RATIO, colors } from '../theme';
+import { matchesQuery } from '../variants';
+import { CardScanner } from './CardScanner';
+
+interface Suggestion {
+  key: string;
+  title: string;
+  subtitle?: string;
+}
+
+/** Campo com sugestões que aparecem enquanto você digita. */
+function AutoField({
+  label,
+  placeholder,
+  text,
+  onText,
+  suggestions,
+  onPick,
+  disabled,
+}: {
+  label: string;
+  placeholder: string;
+  text: string;
+  onText: (t: string) => void;
+  suggestions: Suggestion[];
+  onPick: (key: string) => void;
+  disabled?: boolean;
+}) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <View style={{ marginTop: 12, opacity: disabled ? 0.5 : 1 }}>
+      <Text style={styles.label}>{label}</Text>
+      <TextInput
+        value={text}
+        onChangeText={onText}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setTimeout(() => setFocused(false), 150)}
+        placeholder={placeholder}
+        placeholderTextColor={colors.textFaint}
+        style={styles.input}
+        editable={!disabled}
+        autoCorrect={false}
+      />
+      {focused && suggestions.length > 0 ? (
+        <View style={styles.suggestBox}>
+          {suggestions.map((s) => (
+            <Pressable key={s.key} style={({ pressed }) => [styles.suggest, pressed && { backgroundColor: colors.surface2 }]} onPress={() => onPick(s.key)}>
+              <Text style={styles.suggestTitle} numberOfLines={1}>
+                {s.title}
+              </Text>
+              {s.subtitle ? (
+                <Text style={styles.suggestSub} numberOfLines={1}>
+                  {s.subtitle}
+                </Text>
+              ) : null}
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+export function AddPokedexCard({ visible, dexId, pokemonName, onClose }: { visible: boolean; dexId: number; pokemonName: string; onClose: () => void }) {
+  const { addPokedexCard, data } = useStore();
+  const [sets, setSets] = useState<SetSummary[]>(() => loadSetsCacheAnyAge() ?? []);
+  const [pokemonCards, setPokemonCards] = useState<PokemonCardBrief[]>([]);
+  const [setText, setSetText] = useState('');
+  const [setId, setSetId] = useState<string | null>(null);
+  const [setCards, setSetCards] = useState<PokemonCardBrief[]>([]);
+  const [cardText, setCardText] = useState('');
+  const [card, setCard] = useState<PokemonCardBrief | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [scanMsg, setScanMsg] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // dados: lista de coleções e todas as cartas deste Pokémon
+  useEffect(() => {
+    if (!visible) return;
+    if (!sets.length)
+      fetchAllSets()
+        .then((l) => {
+          setSets(l);
+          saveSetsCache(l);
+        })
+        .catch(() => {});
+    setLoading(true);
+    fetchPokemonCards(dexId)
+      .then(setPokemonCards)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [visible, dexId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // cartas da coleção escolhida
+  useEffect(() => {
+    if (!setId) return setSetCards([]);
+    fetchSetCards(setId).then(setSetCards).catch(() => setSetCards([]));
+  }, [setId]);
+
+  const setById = useMemo(() => new Map(sets.map((s) => [s.id, s])), [sets]);
+  const setName = (id: string) => setById.get(id)?.namePt ?? setById.get(id)?.nameEn ?? id;
+  const setsWithPokemon = useMemo(() => new Set(pokemonCards.map((c) => c.setId)), [pokemonCards]);
+  // código impresso nas cartas (só conhecido para as coleções que já estão em "Minha Coleção")
+  const codeOf = (id: string) => data.collections.find((c) => c.setId === id)?.code;
+
+  const setSuggestions: Suggestion[] = useMemo(() => {
+    if (setId) return [];
+    const list = sets.filter((s) => !setText.trim() || matchesQuery(`${s.namePt ?? ''} ${s.nameEn} ${s.id}`, setText));
+    // coleções que têm este Pokémon vêm primeiro
+    list.sort((a, b) => Number(setsWithPokemon.has(b.id)) - Number(setsWithPokemon.has(a.id)));
+    return list.slice(0, 8).map((s) => ({
+      key: s.id,
+      title: s.namePt ?? s.nameEn,
+      subtitle: setsWithPokemon.has(s.id) ? `tem ${pokemonName}` : s.nameEn !== (s.namePt ?? s.nameEn) ? s.nameEn : undefined,
+    }));
+  }, [sets, setText, setId, setsWithPokemon, pokemonName]);
+
+  const cardSuggestions: Suggestion[] = useMemo(() => {
+    if (!setId || card) return [];
+    const mine = pokemonCards.filter((c) => c.setId === setId);
+    const ids = new Set(mine.map((c) => c.id));
+    const all = [...mine, ...setCards.filter((c) => !ids.has(c.id))];
+    const t = cardText.trim().replace(/^#/, '');
+    const official = setById.get(setId)?.official;
+    return all
+      .filter((c) => !t || (/^\d+$/.test(t) ? String(Number(c.localId)).startsWith(String(Number(t))) : matchesQuery(`${c.name} ${c.localId}`, t)))
+      .slice(0, 8)
+      .map((c) => ({ key: c.id, title: `${c.localId}${official ? `/${official}` : ''} · ${c.name}`, subtitle: ids.has(c.id) ? pokemonName : undefined }));
+  }, [setId, card, pokemonCards, setCards, cardText, setById, pokemonName]);
+
+  const pickSet = (id: string) => {
+    setSetId(id);
+    setSetText(setName(id));
+    setCard(null);
+    setCardText('');
+  };
+  const pickCard = (id: string) => {
+    const c = [...pokemonCards, ...setCards].find((x) => x.id === id);
+    if (!c) return;
+    setCard(c);
+    const official = setById.get(c.setId)?.official;
+    setCardText(`${c.localId}${official ? `/${official}` : ''} · ${c.name}`);
+  };
+
+  const onRead = (text: string) => {
+    setScanning(false);
+    const read = parseFooter(text);
+    const found = matchFooter(read, pokemonCards, (id) => ({ official: setById.get(id)?.official, code: codeOf(id) }));
+    if (!found.length) {
+      setScanMsg(
+        read.number !== undefined
+          ? `Li ${read.number}/${read.total ?? '?'}, mas não achei uma carta de ${pokemonName} com esse número. Preencha abaixo.`
+          : 'Não consegui ler o número da carta. Preencha abaixo ou tente de novo.',
+      );
+      return;
+    }
+    const c = found[0];
+    setSetId(c.setId);
+    setSetText(setName(c.setId));
+    setCard(c);
+    const official = setById.get(c.setId)?.official;
+    setCardText(`${c.localId}${official ? `/${official}` : ''} · ${c.name}`);
+    setScanMsg(found.length > 1 ? `Encontrei ${found.length} possibilidades; confira a coleção.` : `Li ${read.number}/${read.total ?? '?'} — confira e toque em Adicionar.`);
+  };
+
+  const reset = () => {
+    setSetText('');
+    setSetId(null);
+    setCardText('');
+    setCard(null);
+    setScanMsg(null);
+  };
+  const close = () => {
+    reset();
+    onClose();
+  };
+  const save = () => {
+    if (!card) return;
+    addPokedexCard(dexId, {
+      cardId: card.id,
+      setId: card.setId,
+      setName: setName(card.setId),
+      localId: card.localId,
+      name: card.name,
+      image: card.image,
+      official: setById.get(card.setId)?.official,
+    });
+    close();
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={close} statusBarTranslucent>
+      <Pressable style={styles.backdrop} onPress={close}>
+        <Pressable style={styles.sheet} onPress={() => {}}>
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 18 }}>
+            <Text style={styles.title}>{`Adicionar carta de ${pokemonName}`}</Text>
+
+            <Pressable style={styles.camBtn} onPress={() => setScanning(true)}>
+              <Text style={styles.camIcon}>📷</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.camTitle}>Ler pela câmera</Text>
+                <Text style={styles.camSub}>Aponte para o rodapé da carta</Text>
+              </View>
+            </Pressable>
+            {scanMsg ? <Text style={styles.scanMsg}>{scanMsg}</Text> : null}
+            {loading ? <ActivityIndicator color={colors.accent} style={{ marginTop: 8 }} /> : null}
+
+            <AutoField
+              label="Coleção"
+              placeholder="Digite o nome da coleção"
+              text={setText}
+              onText={(t) => {
+                setSetText(t);
+                setSetId(null);
+                setCard(null);
+                setCardText('');
+              }}
+              suggestions={setSuggestions}
+              onPick={pickSet}
+            />
+            <AutoField
+              label="Carta"
+              placeholder={setId ? 'Digite o número ou o nome' : 'Escolha a coleção primeiro'}
+              text={cardText}
+              onText={(t) => {
+                setCardText(t);
+                setCard(null);
+              }}
+              suggestions={cardSuggestions}
+              onPick={pickCard}
+              disabled={!setId}
+            />
+
+            {card?.image ? (
+              <Image source={{ uri: `${card.image}/high.webp` }} style={styles.preview} contentFit="contain" cachePolicy="disk" />
+            ) : null}
+
+            <View style={styles.actions}>
+              <Pressable onPress={close} style={styles.btn}>
+                <Text style={{ color: colors.textDim, fontWeight: '700' }}>Cancelar</Text>
+              </Pressable>
+              <Pressable onPress={save} disabled={!card} style={[styles.btn, { backgroundColor: card ? colors.accent : colors.surface }]}>
+                <Text style={{ color: card ? '#fff' : colors.textFaint, fontWeight: '800' }}>Adicionar</Text>
+              </Pressable>
+            </View>
+          </ScrollView>
+          <CardScanner visible={scanning} onClose={() => setScanning(false)} onRead={onRead} />
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+const styles = StyleSheet.create({
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', padding: 12 },
+  sheet: { backgroundColor: colors.sheet, borderRadius: 28, maxHeight: '92%', borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, overflow: 'hidden' },
+  title: { color: colors.text, fontSize: 20, fontWeight: '900' },
+  camBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14, padding: 14, borderRadius: 18, backgroundColor: colors.accentDim, borderWidth: 1, borderColor: colors.accent },
+  camIcon: { fontSize: 26 },
+  camTitle: { color: colors.text, fontWeight: '800', fontSize: 15 },
+  camSub: { color: colors.textDim, fontSize: 12 },
+  scanMsg: { color: colors.gold, marginTop: 10, fontSize: 13 },
+  label: { color: colors.textFaint, fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
+  input: {
+    color: colors.text,
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    fontSize: 15,
+  },
+  suggestBox: { marginTop: 6, borderRadius: 14, backgroundColor: colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, overflow: 'hidden' },
+  suggest: { paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  suggestTitle: { color: colors.text, fontWeight: '600' },
+  suggestSub: { color: colors.textFaint, fontSize: 11, marginTop: 1 },
+  preview: { width: 180, height: 180 * CARD_RATIO, alignSelf: 'center', marginTop: 16, borderRadius: 10 },
+  actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 18 },
+  btn: { paddingHorizontal: 18, paddingVertical: 11, borderRadius: 999, backgroundColor: colors.surface },
+});

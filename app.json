@@ -4,7 +4,7 @@
     "slug": "pokecolecao",
     "owner": "dauser-jba",
     "version": "1.0.0",
-    "runtimeVersion": "1",
+    "runtimeVersion": "2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -31,6 +31,15 @@
       },
       "edgeToEdgeEnabled": true
     },
-    "plugins": []
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "O app usa a câmera para ler o número e o código impressos no rodapé das cartas.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ]
+    ]
   }
 }

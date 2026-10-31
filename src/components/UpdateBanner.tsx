@@ -30,7 +30,7 @@ export function UpdateBanner() {
 
   if (!isUpdatePending) return null;
   return (
-    <View style={[styles.wrap, { bottom: insets.bottom + 16 }]}>
+    <View style={[styles.wrap, { bottom: insets.bottom + 90 }]}>
       <Text style={styles.text}>Nova versão do app pronta!</Text>
       <Pressable onPress={() => Updates.reloadAsync().catch(() => {})} style={styles.btn}>
         <Text style={styles.btnText}>Atualizar agora</Text>
