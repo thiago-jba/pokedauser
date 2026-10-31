@@ -12,6 +12,10 @@ export interface CollectionEntry {
   releaseDate?: string;
   serieName?: string;
   addedAt: string;
+  /** código impresso nas cartas (ex.: "30C") */
+  code?: string;
+  /** true quando a data de lançamento foi corrigida à mão (não é sobrescrita ao atualizar) */
+  releaseDateManual?: boolean;
   totalVariants?: number;
   totalCards?: number;
 }
@@ -27,6 +31,10 @@ export interface AppData {
   filters: Record<string, { rarities?: string[]; categories?: string[] }>;
   /** ordenação escolhida na tela inicial */
   homeSort?: string;
+  /** visualização da tela inicial: quadros ou lista */
+  homeView?: 'grade' | 'lista';
+  /** eras recolhidas na tela inicial */
+  collapsedEras?: string[];
 }
 
 export const emptyData = (): AppData => ({ version: 1, collections: [], owned: {}, custom: {}, filters: {} });
@@ -66,6 +74,8 @@ export function loadData(): AppData {
     custom: d.custom ?? {},
     filters: d.filters ?? {},
     homeSort: d.homeSort,
+    homeView: d.homeView,
+    collapsedEras: d.collapsedEras ?? [],
   };
 }
 
@@ -188,5 +198,7 @@ export function restoreBackup(b: BackupFile) {
     custom: b.data.custom ?? {},
     filters: b.data.filters ?? {},
     homeSort: b.data.homeSort,
+    homeView: b.data.homeView,
+    collapsedEras: b.data.collapsedEras ?? [],
   });
 }

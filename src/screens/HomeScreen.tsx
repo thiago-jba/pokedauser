@@ -14,11 +14,12 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { fetchAllSets, fetchFullSet, SetSummary } from '../api';
+import { fetchAllSets, fetchFullSet, fetchSetInfo, SetSummary } from '../api';
 import { applySavedFilters, formatPct, progress, setEntries } from '../collection';
-import { eraPt, HOME_SORTS, HomeSort, sortLabel } from '../eras';
-import { SetLogo, SetSymbol } from '../components/SetLogo';
-import { BusyModal, IconButton, ProgressBar } from '../components/ui';
+import { CollectionRow, CollectionTile } from '../components/CollectionCards';
+import { eraPt, eraRank, HOME_SORTS, normalizeSort, sortLabel } from '../eras';
+import { SetLogo } from '../components/SetLogo';
+import { BusyModal, IconButton } from '../components/ui';
 import { versionLabel } from '../components/UpdateBanner';
 import {
   buildBackup,
@@ -38,9 +39,9 @@ import { matchesQuery } from '../variants';
 export function HomeScreen({ openSet }: { openSet: (setId: string) => void }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { data, isOwned, upsertCollection, removeCollection, reload, setHomeSort } = useStore();
+  const { data, isOwned, upsertCollection, removeCollection, reload, setHomeSort, setHomeView, toggleEra, patchCollection } = useStore();
   const [sortPicker, setSortPicker] = useState(false);
-  const sort = (data.homeSort as HomeSort) ?? 'adicionada';
+  const sort = normalizeSort(data.homeSort);
 
   // progresso de cada coleção: todas as variantes (inclusive correções e as adicionadas à mão),
   // com o último filtro de tipo/raridade aplicado naquela coleção — igual à tela da coleção
@@ -55,40 +56,86 @@ export function HomeScreen({ openSet }: { openSet: (setId: string) => void }) {
     return m;
   }, [data.collections, data.custom, data.filters, isOwned]);
 
-  const sorted = useMemo(() => {
-    const list = [...data.collections];
+  // Coleções agrupadas por era (ordem fixa das eras); dentro de cada era, a ordenação escolhida.
+  const groups = useMemo(() => {
     const date = (s?: string) => s ?? '';
-    const name = (c: CollectionEntry) => c.namePt ?? c.nameEn;
     const pct = (c: CollectionEntry) => stats[c.setId]?.pct ?? 0;
-    switch (sort) {
-      case 'lancamento_desc':
-        return list.sort((a, b) => date(b.releaseDate).localeCompare(date(a.releaseDate)));
-      case 'lancamento_asc':
-        return list.sort((a, b) => (date(a.releaseDate) || '9999').localeCompare(date(b.releaseDate) || '9999'));
-      case 'pct_desc':
-        return list.sort((a, b) => pct(b) - pct(a) || name(a).localeCompare(name(b)));
-      case 'pct_asc':
-        return list.sort((a, b) => pct(a) - pct(b) || name(a).localeCompare(name(b)));
-      case 'nome':
-        return list.sort((a, b) => name(a).localeCompare(name(b)));
-      case 'era': {
-        // eras mais recentes primeiro; dentro da era, coleção mais nova primeiro
-        const eraNewest: Record<string, string> = {};
-        for (const c of list) {
-          const e = eraPt(c.serieName);
-          if (date(c.releaseDate) > (eraNewest[e] ?? '')) eraNewest[e] = date(c.releaseDate);
-        }
-        return list.sort((a, b) => {
-          const ea = eraPt(a.serieName);
-          const eb = eraPt(b.serieName);
-          if (ea !== eb) return (eraNewest[eb] ?? '').localeCompare(eraNewest[ea] ?? '') || ea.localeCompare(eb);
+    const cmp = (a: CollectionEntry, b: CollectionEntry) => {
+      switch (sort) {
+        case 'lancamento_asc':
+          return (date(a.releaseDate) || '9999').localeCompare(date(b.releaseDate) || '9999');
+        case 'pct_desc':
+          return pct(b) - pct(a) || date(b.releaseDate).localeCompare(date(a.releaseDate));
+        case 'pct_asc':
+          return pct(a) - pct(b) || date(b.releaseDate).localeCompare(date(a.releaseDate));
+        default:
           return date(b.releaseDate).localeCompare(date(a.releaseDate));
-        });
       }
-      default:
-        return list; // adicionadas por último (ordem em que foram incluídas)
+    };
+    const byEra = new Map<string, CollectionEntry[]>();
+    for (const c of data.collections) {
+      const era = eraPt(c.serieName);
+      byEra.set(era, [...(byEra.get(era) ?? []), c]);
     }
+    return [...byEra.entries()]
+      .sort(([a], [b]) => eraRank(a) - eraRank(b) || a.localeCompare(b))
+      .map(([era, list]) => {
+        const sorted = [...list].sort(cmp);
+        let owned = 0;
+        let total = 0;
+        for (const c of sorted) {
+          owned += stats[c.setId]?.owned ?? 0;
+          total += stats[c.setId]?.total ?? 0;
+        }
+        return { era, list: sorted, owned, total };
+      });
   }, [data.collections, sort, stats]);
+
+  // Linhas da lista: cabeçalho da era + coleções (em pares na visualização em quadros)
+  type HomeRow =
+    | { kind: 'era'; era: string; count: number; owned: number; total: number; collapsed: boolean }
+    | { kind: 'tiles'; key: string; items: CollectionEntry[] }
+    | { kind: 'row'; item: CollectionEntry };
+  const view = data.homeView ?? 'grade';
+  const collapsed = useMemo(() => new Set(data.collapsedEras ?? []), [data.collapsedEras]);
+  const rows: HomeRow[] = useMemo(() => {
+    const out: HomeRow[] = [];
+    for (const g of groups) {
+      const isCollapsed = collapsed.has(g.era);
+      out.push({ kind: 'era', era: g.era, count: g.list.length, owned: g.owned, total: g.total, collapsed: isCollapsed });
+      if (isCollapsed) continue;
+      if (view === 'lista') for (const item of g.list) out.push({ kind: 'row', item });
+      else
+        for (let i = 0; i < g.list.length; i += 2)
+          out.push({ kind: 'tiles', key: `${g.era}-${i}`, items: g.list.slice(i, i + 2) });
+    }
+    return out;
+  }, [groups, collapsed, view]);
+
+  // Coleções adicionadas antes desta versão não têm o código (ex.: 30C): busca só os dados básicos.
+  useEffect(() => {
+    const missing = data.collections.filter((c) => !c.code);
+    if (!missing.length) return;
+    let alive = true;
+    (async () => {
+      for (const c of missing) {
+        try {
+          const info = await fetchSetInfo(c.setId);
+          if (!alive) return;
+          patchCollection(c.setId, {
+            code: info.code ?? '',
+            serieName: info.serieName ?? c.serieName,
+            releaseDate: c.releaseDateManual ? c.releaseDate : info.releaseDate ?? c.releaseDate,
+          });
+        } catch {
+          // sem internet: tenta na próxima vez
+        }
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [data.collections.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const [query, setQuery] = useState('');
   const [allSets, setAllSets] = useState<SetSummary[] | null>(() => loadSetsCache());
   const [setsError, setSetsError] = useState<string | null>(null);
@@ -222,13 +269,27 @@ export function HomeScreen({ openSet }: { openSet: (setId: string) => void }) {
         ) : null}
       </View>
 
-      {!searching && data.collections.length > 1 ? (
-        <Pressable style={styles.sortRow} onPress={() => setSortPicker(true)} hitSlop={6}>
-          <Text style={styles.sortLabel}>Ordenar:</Text>
-          <Text style={styles.sortValue} numberOfLines={1}>
-            {sortLabel(sort)} ▾
-          </Text>
-        </Pressable>
+      {!searching && data.collections.length > 0 ? (
+        <View style={styles.toolbar}>
+          <Pressable style={styles.sortBtn} onPress={() => setSortPicker(true)} hitSlop={6}>
+            <Text style={styles.sortLabel}>Ordenar</Text>
+            <Text style={styles.sortValue} numberOfLines={1}>
+              {sortLabel(sort)} ▾
+            </Text>
+          </Pressable>
+          <View style={styles.viewToggle}>
+            {(['grade', 'lista'] as const).map((v) => (
+              <Pressable
+                key={v}
+                onPress={() => setHomeView(v)}
+                style={[styles.viewBtn, view === v && styles.viewBtnOn]}
+                accessibilityLabel={v === 'grade' ? 'Ver em quadros' : 'Ver em lista'}
+              >
+                <Text style={[styles.viewBtnText, view === v && { color: colors.text }]}>{v === 'grade' ? '▦' : '☰'}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
       ) : null}
 
       {searching ? (
@@ -263,61 +324,45 @@ export function HomeScreen({ openSet }: { openSet: (setId: string) => void }) {
       ) : (
         <FlatList
           key="colecoes"
-          data={sorted}
-          keyExtractor={(c) => c.setId}
-          numColumns={2}
-          columnWrapperStyle={{ gap: 12 }}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 24, gap: 12 }}
+          data={rows}
+          keyExtractor={(r) => (r.kind === 'era' ? `era-${r.era}` : r.kind === 'tiles' ? r.key : r.item.setId)}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 24, gap: view === 'lista' ? 8 : 12 }}
           ListEmptyComponent={
             <View style={styles.emptyBox}>
               <Text style={styles.emptyTitle}>Comece sua coleção</Text>
               <Text style={styles.empty}>Digite o nome de uma expansão no campo acima, por exemplo “Evoluções Prismáticas” ou “Fagulhas Impetuosas”.</Text>
             </View>
           }
-          renderItem={({ item }) => {
-            const st = stats[item.setId] ?? { owned: 0, total: 0, pct: 0, filtered: false };
-            return (
-              <Pressable
-                style={({ pressed }) => [styles.tile, { width: colW, height: colW * 1.18 }, pressed && { opacity: 0.85 }]}
-                onPress={() => openSet(item.setId)}
-                onLongPress={() => confirmRemove(item)}
-              >
-                {/* fundo: o próprio logo ampliado e desfocado */}
-                <SetLogo
-                  setId={item.setId}
-                  logo={item.logo}
-                  symbol={item.symbol}
-                  style={[StyleSheet.absoluteFill, { opacity: 0.45, transform: [{ scale: 1.6 }] }]}
-                  fit="cover"
-                  blurRadius={14}
-                  hideFallbackText
-                />
-                <View style={[StyleSheet.absoluteFill, styles.tileTint]} />
-                {/* logo grande, ocupando o quadrado */}
-                <SetLogo setId={item.setId} logo={item.logo} symbol={item.symbol} style={styles.tileLogo} />
-                {st.filtered ? (
-                  <View style={styles.filterBadge}>
-                    <Text style={styles.filterBadgeText}>filtro</Text>
-                  </View>
-                ) : null}
-                <View style={styles.tileInfo}>
-                  <Text style={styles.tileEra} numberOfLines={1}>
-                    {eraPt(item.serieName)}
-                    {item.releaseDate ? ` · ${item.releaseDate.slice(0, 4)}` : ''}
+          renderItem={({ item: r }) => {
+            if (r.kind === 'era') {
+              const pct = r.total ? (r.owned / r.total) * 100 : 0;
+              return (
+                <Pressable style={styles.eraHeader} onPress={() => toggleEra(r.era)} hitSlop={4}>
+                  <Text style={styles.eraArrow}>{r.collapsed ? '▸' : '▾'}</Text>
+                  <Text style={styles.eraName} numberOfLines={1}>
+                    {r.era.toUpperCase()}
                   </Text>
-                  <View style={styles.tileNameRow}>
-                    <SetSymbol symbol={item.symbol} size={14} />
-                    <Text style={styles.tileName} numberOfLines={1}>
-                      {item.namePt ?? item.nameEn}
-                    </Text>
-                  </View>
-                  <View style={styles.tileStatsRow}>
-                    <Text style={styles.tileSub}>{`${st.owned} / ${st.total}`}</Text>
-                    <Text style={[styles.tilePct, st.pct >= 100 && { color: colors.gold }]}>{formatPct(st.pct)}</Text>
-                  </View>
-                  <ProgressBar value={st.owned} total={st.total} height={5} />
-                </View>
-              </Pressable>
+                  <Text style={styles.eraCount}>{`${r.count} ${r.count === 1 ? 'coleção' : 'coleções'} · ${formatPct(pct)}`}</Text>
+                </Pressable>
+              );
+            }
+            if (r.kind === 'row') {
+              const st = stats[r.item.setId] ?? { owned: 0, total: 0, pct: 0, filtered: false };
+              return <CollectionRow item={r.item} st={st} onPress={() => openSet(r.item.setId)} onLongPress={() => confirmRemove(r.item)} />;
+            }
+            return (
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                {r.items.map((item) => (
+                  <CollectionTile
+                    key={item.setId}
+                    item={item}
+                    width={colW}
+                    st={stats[item.setId] ?? { owned: 0, total: 0, pct: 0, filtered: false }}
+                    onPress={() => openSet(item.setId)}
+                    onLongPress={() => confirmRemove(item)}
+                  />
+                ))}
+              </View>
             );
           }}
         />
@@ -404,30 +449,38 @@ const styles = StyleSheet.create({
   resultSub: { color: colors.textDim, fontSize: 12, marginTop: 2 },
   addTag: { color: colors.accent, fontWeight: '700', fontSize: 13 },
   addedTag: { color: colors.success },
-  tile: { backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
-  tileTint: { backgroundColor: 'rgba(17,18,28,0.35)' },
-  tileLogo: { position: 'absolute', top: 10, left: 10, right: 10, bottom: 86 },
-  tileInfo: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 10,
-    paddingTop: 8,
-    paddingBottom: 10,
-    backgroundColor: 'rgba(12,13,22,0.82)',
+  toolbar: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginTop: -4, marginBottom: 10 },
+  sortBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
   },
-  tileEra: { color: colors.gold, fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
-  tileNameRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
-  tileName: { color: colors.text, fontWeight: '800', fontSize: 13, flex: 1 },
-  tileStatsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 3, marginBottom: 5 },
-  tileSub: { color: colors.textDim, fontSize: 12 },
-  tilePct: { color: colors.text, fontSize: 13, fontWeight: '800' },
-  filterBadge: { position: 'absolute', top: 8, right: 8, backgroundColor: colors.accent, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
-  filterBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
-  sortRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginHorizontal: 16, marginTop: -4, marginBottom: 12 },
-  sortLabel: { color: colors.textFaint, fontSize: 13 },
+  sortLabel: { color: colors.textFaint, fontSize: 12 },
   sortValue: { color: colors.text, fontSize: 13, fontWeight: '700', flexShrink: 1 },
+  viewToggle: { flexDirection: 'row', backgroundColor: colors.surface, borderRadius: 10, borderWidth: 1, borderColor: colors.border, padding: 3 },
+  viewBtn: { width: 38, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 7 },
+  viewBtnOn: { backgroundColor: colors.surface2 },
+  viewBtnText: { color: colors.textFaint, fontSize: 18 },
+  eraHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    marginTop: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  eraArrow: { color: colors.gold, fontSize: 16, width: 16 },
+  eraName: { color: colors.gold, fontSize: 14, fontWeight: '900', letterSpacing: 0.8, flex: 1 },
+  eraCount: { color: colors.textDim, fontSize: 12 },
   sortBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 28 },
   sortBox: { backgroundColor: colors.surface2, borderRadius: 14, paddingVertical: 12 },
   sortTitle: { color: colors.text, fontSize: 16, fontWeight: '800', paddingHorizontal: 18, marginBottom: 6 },

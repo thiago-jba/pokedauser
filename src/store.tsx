@@ -22,6 +22,9 @@ interface Store {
   setRarityFilter: (setId: string, rarities: string[]) => void;
   setCategoryFilter: (setId: string, categories: string[]) => void;
   setHomeSort: (sort: string) => void;
+  setHomeView: (view: 'grade' | 'lista') => void;
+  toggleEra: (era: string) => void;
+  patchCollection: (setId: string, fields: Partial<CollectionEntry>) => void;
   reload: () => void;
 }
 
@@ -79,15 +82,19 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const upsertCollection = useCallback((set: StoredSet) => {
     saveSet(set);
     setData((d) => {
+      const prev = d.collections.find((c) => c.setId === set.id);
       const entry: CollectionEntry = {
+        ...prev,
         setId: set.id,
         namePt: set.namePt,
         nameEn: set.nameEn,
         logo: set.logo,
         symbol: set.symbol,
-        releaseDate: set.releaseDate,
+        // data corrigida à mão tem prioridade sobre a da fonte de dados
+        releaseDate: prev?.releaseDateManual ? prev.releaseDate : set.releaseDate,
         serieName: set.serieName,
-        addedAt: d.collections.find((c) => c.setId === set.id)?.addedAt ?? new Date().toISOString(),
+        code: set.code ?? prev?.code,
+        addedAt: prev?.addedAt ?? new Date().toISOString(),
         totalCards: set.cards.length,
       };
       // remove marcações de variantes que deixaram de existir
@@ -140,6 +147,20 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const setHomeSort = useCallback((homeSort: string) => setData((d) => ({ ...d, homeSort })), []);
+  const setHomeView = useCallback((homeView: 'grade' | 'lista') => setData((d) => ({ ...d, homeView })), []);
+  const toggleEra = useCallback((era: string) => {
+    setData((d) => {
+      const cur = new Set(d.collapsedEras ?? []);
+      cur.has(era) ? cur.delete(era) : cur.add(era);
+      return { ...d, collapsedEras: [...cur] };
+    });
+  }, []);
+  const patchCollection = useCallback((setId: string, fields: Partial<CollectionEntry>) => {
+    setData((d) => ({
+      ...d,
+      collections: d.collections.map((c) => (c.setId === setId ? { ...c, ...fields } : c)),
+    }));
+  }, []);
 
   const reload = useCallback(() => setData(loadData()), []);
 
@@ -158,9 +179,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setRarityFilter,
       setCategoryFilter,
       setHomeSort,
+      setHomeView,
+      toggleEra,
+      patchCollection,
       reload,
     }),
-    [data, isOwned, ownedCountry, setCountry, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, setCategoryFilter, setHomeSort, reload],
+    [data, isOwned, ownedCountry, setCountry, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, setCategoryFilter, setHomeSort, setHomeView, toggleEra, patchCollection, reload],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

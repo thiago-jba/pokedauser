@@ -40,6 +40,8 @@ export interface StoredSet {
   nameEn: string;
   serieName?: string;
   releaseDate?: string;
+  /** código impresso no canto inferior esquerdo das cartas (ex.: "30C", "PRE") */
+  code?: string;
   logo?: string;
   symbol?: string;
   official?: number;
@@ -112,6 +114,7 @@ export async function fetchAllSets(): Promise<SetSummary[]> {
 interface ApiSetFull extends ApiSetBrief {
   releaseDate?: string;
   serie?: { id: string; name: string };
+  abbreviation?: { official?: string; localized?: string };
   cards: { id: string; localId: string; name: string; image?: string }[];
 }
 
@@ -181,11 +184,25 @@ export async function fetchFullSet(
     namePt: pt?.name,
     serieName: pt?.serie?.name ?? en.serie?.name,
     releaseDate: en.releaseDate,
+    code: pt?.abbreviation?.localized ?? en.abbreviation?.official ?? pt?.abbreviation?.official,
     logo: pt?.logo ?? en.logo,
     symbol: en.symbol,
     official: en.cardCount?.official,
     cards,
     fetchedAt: new Date().toISOString(),
+  };
+}
+
+/** Dados básicos da coleção (data, era, código), sem baixar as cartas. */
+export async function fetchSetInfo(setId: string): Promise<{ releaseDate?: string; serieName?: string; code?: string }> {
+  const [en, pt] = await Promise.all([
+    getJson<ApiSetFull>(`${BASE}/${EN}/sets/${encodeURIComponent(setId)}`),
+    getJsonOrNull<ApiSetFull>(`${BASE}/${PT}/sets/${encodeURIComponent(setId)}`),
+  ]);
+  return {
+    releaseDate: en.releaseDate,
+    serieName: pt?.serie?.name ?? en.serie?.name,
+    code: pt?.abbreviation?.localized ?? en.abbreviation?.official ?? pt?.abbreviation?.official,
   };
 }
 

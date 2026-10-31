@@ -14,7 +14,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchFullSet, StoredCard, StoredSet } from '../api';
 import { allCards, applySavedFilters, Entry, formatPct, ownedKey, progress, setEntries } from '../collection';
+import { SetCodeBadge } from '../components/CollectionCards';
 import { SetLogo } from '../components/SetLogo';
+import { eraPt, formatDateBr, parseDateBr } from '../eras';
 import { CardDetail } from '../components/CardDetail';
 import { CardTile } from '../components/CardTile';
 import { BusyModal, Chip, IconButton, ProgressBar, Segmented } from '../components/ui';
@@ -34,7 +36,9 @@ const CATEGORY_COLOR: Partial<Record<VariantCategory, string>> = {
 export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { isOwned, ownedCountry, toggleOwned, setOwned, upsertCollection, setRarityFilter, setCategoryFilter, data } = useStore();
+  const { isOwned, ownedCountry, toggleOwned, setOwned, upsertCollection, setRarityFilter, setCategoryFilter, patchCollection, data } = useStore();
+  const entry = data.collections.find((c) => c.setId === setId);
+  const [editingDate, setEditingDate] = useState<string | null>(null);
   const [set, setSet] = useState<StoredSet | null>(() => loadSet(setId));
   const [status, setStatus] = useState<Status>('todas');
   const [rarityPicker, setRarityPicker] = useState(false);
@@ -156,13 +160,28 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
             <Text style={styles.summaryBig}>{`${stats.owned} de ${stats.total}`}</Text>
             <Text style={[styles.pct, stats.pct >= 100 && { color: colors.gold }]}>{formatPct(stats.pct)}</Text>
           </View>
-          <Text style={styles.summarySub}>
-            {hasFilter ? 'cartas com os filtros aplicados' : `cartas no master set${set.releaseDate ? ` · ${set.releaseDate.slice(0, 4)}` : ''}`}
-          </Text>
+          <Text style={styles.summarySub}>{hasFilter ? 'cartas com os filtros aplicados' : 'cartas no master set'}</Text>
           <View style={{ marginTop: 8 }}>
             <ProgressBar value={stats.owned} total={stats.total} height={8} />
           </View>
         </View>
+      </View>
+
+      <View style={styles.infoRow}>
+        <SetCodeBadge code={entry?.code ?? set.code} />
+        <Text style={styles.infoEra} numberOfLines={1}>
+          {eraPt(entry?.serieName ?? set.serieName)}
+        </Text>
+        <Pressable
+          style={styles.infoDate}
+          hitSlop={6}
+          onPress={() => setEditingDate(formatDateBr(entry?.releaseDate ?? set.releaseDate))}
+        >
+          <Text style={styles.infoDateLabel}>Lançamento</Text>
+          <Text style={styles.infoDateValue}>
+            {formatDateBr(entry?.releaseDate ?? set.releaseDate) || 'definir'} ✎
+          </Text>
+        </Pressable>
       </View>
 
       <View style={styles.searchBox}>
@@ -290,6 +309,45 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
         </Pressable>
       </Modal>
 
+      <Modal visible={editingDate !== null} transparent animationType="fade" onRequestClose={() => setEditingDate(null)}>
+        <Pressable style={styles.pickerBackdrop} onPress={() => setEditingDate(null)}>
+          <Pressable style={[styles.picker, { paddingHorizontal: 18 }]} onPress={() => {}}>
+            <Text style={[styles.pickerTitle, { paddingHorizontal: 0 }]}>Data de lançamento</Text>
+            <Text style={[styles.pickerHint, { paddingHorizontal: 0 }]}>
+              Vem da TCGdex (lançamento oficial). Se a data no Brasil for outra, corrija aqui (DD/MM/AAAA).
+            </Text>
+            <TextInput
+              value={editingDate ?? ''}
+              onChangeText={setEditingDate}
+              placeholder="16/09/2026"
+              placeholderTextColor={colors.textFaint}
+              keyboardType="numbers-and-punctuation"
+              style={styles.dateInput}
+              autoFocus
+            />
+            <View style={[styles.pickerActions, { paddingHorizontal: 0 }]}>
+              <Pressable onPress={() => setEditingDate(null)} style={styles.pickerBtn}>
+                <Text style={{ color: colors.textDim, fontWeight: '700' }}>Cancelar</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  const iso = parseDateBr(editingDate ?? '');
+                  if (!iso) {
+                    Alert.alert('Data inválida', 'Use o formato DD/MM/AAAA, por exemplo 16/09/2026.');
+                    return;
+                  }
+                  patchCollection(setId, { releaseDate: iso, releaseDateManual: true });
+                  setEditingDate(null);
+                }}
+                style={[styles.pickerBtn, { backgroundColor: colors.accent }]}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700' }}>Salvar</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <CardDetail set={set} card={detail} onClose={() => setDetail(null)} />
       <BusyModal visible={!!busy} title={busy?.title ?? ''} done={busy?.done} total={busy?.total} />
     </View>
@@ -306,6 +364,22 @@ const styles = StyleSheet.create({
   summaryBig: { color: colors.text, fontSize: 20, fontWeight: '800' },
   pct: { color: colors.accent, fontSize: 20, fontWeight: '800' },
   summarySub: { color: colors.textDim, fontSize: 12 },
+  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginTop: -4, marginBottom: 12 },
+  infoEra: { color: colors.gold, fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5, flex: 1 },
+  infoDate: { alignItems: 'flex-end' },
+  infoDateLabel: { color: colors.textFaint, fontSize: 10 },
+  infoDateValue: { color: colors.text, fontSize: 13, fontWeight: '700' },
+  dateInput: {
+    color: colors.text,
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 18,
+    marginTop: 6,
+  },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
