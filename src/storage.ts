@@ -1,6 +1,7 @@
 // Armazenamento local no celular (arquivos JSON na pasta privada do app).
 import { Directory, File, Paths } from 'expo-file-system';
 import type { SetSummary, StoredSet } from './api';
+import { ApiVariantDetailed, detectSetWideStamps, keyToVariant } from './variants';
 
 export interface CollectionEntry {
   setId: string;
@@ -20,9 +21,13 @@ export interface AppData {
   collections: CollectionEntry[];
   /** setId -> lista de "cardId#variantKey" que eu tenho */
   owned: Record<string, string[]>;
+  /** setId -> cardId -> variantes adicionadas à mão */
+  custom: Record<string, Record<string, ApiVariantDetailed[]>>;
+  /** setId -> último filtro de raridade usado */
+  filters: Record<string, { rarities?: string[] }>;
 }
 
-export const emptyData = (): AppData => ({ version: 1, collections: [], owned: {} });
+export const emptyData = (): AppData => ({ version: 1, collections: [], owned: {}, custom: {}, filters: {} });
 
 const setsDir = () => new Directory(Paths.document, 'sets');
 const mainFile = () => new File(Paths.document, 'colecao.json');
@@ -52,20 +57,49 @@ function ensureDirs() {
 export function loadData(): AppData {
   const d = readJson<AppData>(mainFile());
   if (!d || !Array.isArray(d.collections)) return emptyData();
-  return { version: 1, collections: d.collections, owned: d.owned ?? {} };
+  return { version: 1, collections: d.collections, owned: d.owned ?? {}, custom: d.custom ?? {}, filters: d.filters ?? {} };
 }
 
 export function saveData(data: AppData) {
   writeText(mainFile(), JSON.stringify(data));
 }
 
+const setCache = new Map<string, StoredSet>();
+
+/** Converte coleções salvas pela versão 1.0.1–1.0.3 do app (sem precisar de internet). */
+function migrateSet(old: any): StoredSet {
+  const cards = (old.cards ?? []).map((c: any) => ({
+    id: c.id,
+    localId: c.localId,
+    name: c.name,
+    image: c.image,
+    rarity: c.rarity,
+    category: c.category,
+    raw: c.raw ?? (c.variants ?? []).map((v: any) => keyToVariant(v.key)),
+  }));
+  const isPromoSet = /promo/i.test(old.nameEn ?? '') || /promo/i.test(old.serieName ?? '');
+  return { ...old, schema: 2, cards, isPromoSet, ignoredStamps: detectSetWideStamps(cards) };
+}
+
 export function loadSet(id: string): StoredSet | null {
-  return readJson<StoredSet>(setFile(id));
+  const cached = setCache.get(id);
+  if (cached) return cached;
+  let s = readJson<any>(setFile(id));
+  if (!s) return null;
+  if (s.schema !== 2) {
+    s = migrateSet(s);
+    try {
+      saveSet(s);
+    } catch {}
+  }
+  setCache.set(id, s);
+  return s;
 }
 
 export function saveSet(set: StoredSet) {
   ensureDirs();
   writeText(setFile(set.id), JSON.stringify(set));
+  setCache.set(set.id, set);
 }
 
 export function deleteSet(id: string) {
@@ -73,6 +107,7 @@ export function deleteSet(id: string) {
     const f = setFile(id);
     if (f.exists) f.delete();
   } catch {}
+  setCache.delete(id);
 }
 
 const SETS_CACHE_DAYS = 3;
@@ -126,6 +161,12 @@ export async function readBackupFile(uri: string): Promise<BackupFile> {
 }
 
 export function restoreBackup(b: BackupFile) {
-  for (const s of b.sets ?? []) saveSet(s);
-  saveData({ version: 1, collections: b.data.collections, owned: b.data.owned ?? {} });
+  for (const s of b.sets ?? []) saveSet((s as any).schema === 2 ? s : migrateSet(s));
+  saveData({
+    version: 1,
+    collections: b.data.collections,
+    owned: b.data.owned ?? {},
+    custom: b.data.custom ?? {},
+    filters: b.data.filters ?? {},
+  });
 }

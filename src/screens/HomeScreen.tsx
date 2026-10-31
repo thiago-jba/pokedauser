@@ -1,5 +1,4 @@
 import * as DocumentPicker from 'expo-document-picker';
-import { Image } from 'expo-image';
 import * as Sharing from 'expo-sharing';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -15,12 +14,15 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { assetUrl, fetchAllSets, fetchFullSet, SetSummary } from '../api';
+import { fetchAllSets, fetchFullSet, SetSummary } from '../api';
+import { formatPct, progress, setEntries } from '../collection';
+import { SetLogo, SetSymbol } from '../components/SetLogo';
 import { BusyModal, IconButton, ProgressBar } from '../components/ui';
 import { versionLabel } from '../components/UpdateBanner';
 import {
   buildBackup,
   CollectionEntry,
+  loadSet,
   loadSetsCache,
   loadSetsCacheAnyAge,
   readBackupFile,
@@ -35,7 +37,17 @@ import { matchesQuery } from '../variants';
 export function HomeScreen({ openSet }: { openSet: (setId: string) => void }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { data, ownedCount, upsertCollection, removeCollection, reload } = useStore();
+  const { data, isOwned, upsertCollection, removeCollection, reload } = useStore();
+
+  // progresso de cada coleção, contando todas as variantes (inclusive correções e as adicionadas à mão)
+  const stats = useMemo(() => {
+    const m: Record<string, { owned: number; total: number; pct: number }> = {};
+    for (const c of data.collections) {
+      const set = loadSet(c.setId);
+      if (set) m[c.setId] = progress(setEntries(set, data.custom[c.setId]), (k) => isOwned(c.setId, k));
+    }
+    return m;
+  }, [data.collections, data.custom, isOwned]);
   const [query, setQuery] = useState('');
   const [allSets, setAllSets] = useState<SetSummary[] | null>(() => loadSetsCache());
   const [setsError, setSetsError] = useState<string | null>(null);
@@ -185,9 +197,7 @@ export function HomeScreen({ openSet }: { openSet: (setId: string) => void }) {
           }
           renderItem={({ item }) => (
             <Pressable style={({ pressed }) => [styles.result, pressed && { backgroundColor: colors.surface2 }]} onPress={() => addSet(item)}>
-              <View style={styles.resultLogo}>
-                {item.logo ? <Image source={{ uri: assetUrl(item.logo) }} style={{ width: '100%', height: '100%' }} contentFit="contain" /> : null}
-              </View>
+              <SetLogo logo={item.logo} symbol={item.symbol} fallbackText={item.id} style={styles.resultLogo} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.resultName} numberOfLines={2}>
                   {item.namePt ?? item.nameEn}
@@ -215,23 +225,22 @@ export function HomeScreen({ openSet }: { openSet: (setId: string) => void }) {
             </View>
           }
           renderItem={({ item }) => {
-            const owned = ownedCount(item.setId);
-            const total = item.totalVariants ?? 0;
-            const pct = total ? Math.round((owned / total) * 100) : 0;
+            const st = stats[item.setId] ?? { owned: 0, total: 0, pct: 0 };
             return (
               <Pressable
                 style={({ pressed }) => [styles.tile, { width: colW }, pressed && { opacity: 0.8 }]}
                 onPress={() => openSet(item.setId)}
                 onLongPress={() => confirmRemove(item)}
               >
-                <View style={styles.tileLogo}>
-                  {item.logo ? <Image source={{ uri: assetUrl(item.logo) }} style={{ width: '100%', height: '100%' }} contentFit="contain" cachePolicy="disk" /> : null}
+                <SetLogo logo={item.logo} symbol={item.symbol} fallbackText={item.setId} style={styles.tileLogo} />
+                <View style={styles.tileNameRow}>
+                  <SetSymbol symbol={item.symbol} />
+                  <Text style={styles.tileName} numberOfLines={2}>
+                    {item.namePt ?? item.nameEn}
+                  </Text>
                 </View>
-                <Text style={styles.tileName} numberOfLines={2}>
-                  {item.namePt ?? item.nameEn}
-                </Text>
-                <Text style={styles.tileSub}>{`${owned} / ${total} · ${pct}%`}</Text>
-                <ProgressBar value={owned} total={total} />
+                <Text style={styles.tileSub}>{`${st.owned} / ${st.total} · ${formatPct(st.pct)}`}</Text>
+                <ProgressBar value={st.owned} total={st.total} />
               </Pressable>
             );
           }}
@@ -300,7 +309,8 @@ const styles = StyleSheet.create({
   addedTag: { color: colors.success },
   tile: { backgroundColor: colors.surface, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: colors.border },
   tileLogo: { height: 56, marginBottom: 10 },
-  tileName: { color: colors.text, fontWeight: '700', fontSize: 14, minHeight: 36 },
+  tileNameRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, minHeight: 36 },
+  tileName: { color: colors.text, fontWeight: '700', fontSize: 14, flex: 1 },
   tileSub: { color: colors.textDim, fontSize: 12, marginTop: 4, marginBottom: 8 },
   emptyBox: { paddingTop: 40, alignItems: 'center', paddingHorizontal: 20 },
   emptyTitle: { color: colors.text, fontSize: 18, fontWeight: '700', marginBottom: 6 },

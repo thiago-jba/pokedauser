@@ -2,7 +2,7 @@
 // Português do Brasil = código "pt". Os dados técnicos (variantes, raridade) vêm do
 // endpoint em inglês, que traz os valores sem tradução e é sempre o mais completo.
 
-import { buildVariants, CardVariant, rarityPt } from './variants';
+import { ApiVariantDetailed, cleanRaw, detectSetWideStamps, rarityPt } from './variants';
 
 const BASE = 'https://api.tcgdex.net/v2';
 const PT = 'pt';
@@ -26,11 +26,16 @@ export interface StoredCard {
   image?: string;
   rarity?: string;
   category?: string;
-  variants: CardVariant[];
+  /** variantes no formato da API (a classificação é feita na hora de mostrar) */
+  raw: ApiVariantDetailed[];
 }
 
 export interface StoredSet {
+  schema: 2;
   id: string;
+  isPromoSet: boolean;
+  /** carimbos que estão na coleção inteira (ex.: "30th-anniversary") */
+  ignoredStamps: string[];
   namePt?: string;
   nameEn: string;
   serieName?: string;
@@ -162,13 +167,16 @@ export async function fetchFullSet(
       image: p?.image ?? brief.image ?? detail?.image,
       rarity: rarityPt(detail?.rarity),
       category: detail?.category,
-      variants: buildVariants(detail?.variants_detailed, detail?.variants, isPromoSet),
+      raw: cleanRaw(detail?.variants_detailed, detail?.variants),
     };
     return card;
   });
 
   return {
+    schema: 2,
     id: en.id,
+    isPromoSet,
+    ignoredStamps: detectSetWideStamps(cards),
     nameEn: en.name,
     namePt: pt?.name,
     serieName: pt?.serie?.name ?? en.serie?.name,

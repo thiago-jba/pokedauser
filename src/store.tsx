@@ -1,19 +1,21 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { StoredSet } from './api';
+import { ownedKey, setEntries } from './collection';
 import { AppData, CollectionEntry, deleteSet, loadData, saveData, saveSet } from './storage';
+import { ApiVariantDetailed, variantKey } from './variants';
 
-export const ownedKey = (cardId: string, variantKey: string) => `${cardId}#${variantKey}`;
-
-export const countVariants = (set: StoredSet) => set.cards.reduce((n, c) => n + c.variants.length, 0);
+export { ownedKey };
 
 interface Store {
   data: AppData;
   isOwned: (setId: string, key: string) => boolean;
-  ownedCount: (setId: string) => number;
   setOwned: (setId: string, keys: string[], value: boolean) => void;
   toggleOwned: (setId: string, key: string) => void;
   upsertCollection: (set: StoredSet) => void;
   removeCollection: (setId: string) => void;
+  addCustomVariant: (setId: string, cardId: string, v: ApiVariantDetailed) => void;
+  removeCustomVariant: (setId: string, cardId: string, key: string) => void;
+  setRarityFilter: (setId: string, rarities: string[]) => void;
   reload: () => void;
 }
 
@@ -46,7 +48,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, [data.owned]);
 
   const isOwned = useCallback((setId: string, key: string) => !!ownedSets[setId]?.has(key), [ownedSets]);
-  const ownedCount = useCallback((setId: string) => ownedSets[setId]?.size ?? 0, [ownedSets]);
 
   const setOwned = useCallback((setId: string, keys: string[], value: boolean) => {
     setData((d) => {
@@ -76,11 +77,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         releaseDate: set.releaseDate,
         serieName: set.serieName,
         addedAt: d.collections.find((c) => c.setId === set.id)?.addedAt ?? new Date().toISOString(),
-        totalVariants: countVariants(set),
         totalCards: set.cards.length,
       };
       // remove marcações de variantes que deixaram de existir
-      const valid = new Set(set.cards.flatMap((c) => c.variants.map((v) => ownedKey(c.id, v.key))));
+      const valid = new Set(setEntries(set, d.custom[set.id]).map((e) => e.key));
       const owned = (d.owned[set.id] ?? []).filter((k) => valid.has(k));
       const others = d.collections.filter((c) => c.setId !== set.id);
       return { ...d, collections: [entry, ...others], owned: { ...d.owned, [set.id]: owned } };
@@ -91,16 +91,54 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     deleteSet(setId);
     setData((d) => {
       const owned = { ...d.owned };
+      const custom = { ...d.custom };
+      const filters = { ...d.filters };
       delete owned[setId];
-      return { ...d, collections: d.collections.filter((c) => c.setId !== setId), owned };
+      delete custom[setId];
+      delete filters[setId];
+      return { ...d, collections: d.collections.filter((c) => c.setId !== setId), owned, custom, filters };
     });
+  }, []);
+
+  const addCustomVariant = useCallback((setId: string, cardId: string, v: ApiVariantDetailed) => {
+    setData((d) => {
+      const forSet = { ...(d.custom[setId] ?? {}) };
+      const list = forSet[cardId] ?? [];
+      if (list.some((x) => variantKey(x) === variantKey(v))) return d;
+      forSet[cardId] = [...list, v];
+      return { ...d, custom: { ...d.custom, [setId]: forSet } };
+    });
+  }, []);
+
+  const removeCustomVariant = useCallback((setId: string, cardId: string, key: string) => {
+    setData((d) => {
+      const forSet = { ...(d.custom[setId] ?? {}) };
+      forSet[cardId] = (forSet[cardId] ?? []).filter((x) => variantKey(x) !== key);
+      const owned = (d.owned[setId] ?? []).filter((k) => k !== ownedKey(cardId, key));
+      return { ...d, custom: { ...d.custom, [setId]: forSet }, owned: { ...d.owned, [setId]: owned } };
+    });
+  }, []);
+
+  const setRarityFilter = useCallback((setId: string, rarities: string[]) => {
+    setData((d) => ({ ...d, filters: { ...d.filters, [setId]: { ...d.filters[setId], rarities } } }));
   }, []);
 
   const reload = useCallback(() => setData(loadData()), []);
 
   const value = useMemo(
-    () => ({ data, isOwned, ownedCount, setOwned, toggleOwned, upsertCollection, removeCollection, reload }),
-    [data, isOwned, ownedCount, setOwned, toggleOwned, upsertCollection, removeCollection, reload],
+    () => ({
+      data,
+      isOwned,
+      setOwned,
+      toggleOwned,
+      upsertCollection,
+      removeCollection,
+      addCustomVariant,
+      removeCustomVariant,
+      setRarityFilter,
+      reload,
+    }),
+    [data, isOwned, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, reload],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

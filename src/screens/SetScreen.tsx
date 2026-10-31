@@ -1,4 +1,3 @@
-import { Image } from 'expo-image';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
@@ -13,21 +12,18 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { assetUrl, fetchFullSet, StoredCard, StoredSet } from '../api';
+import { fetchFullSet, StoredCard, StoredSet } from '../api';
+import { Entry, formatPct, ownedKey, progress, setEntries } from '../collection';
+import { SetLogo } from '../components/SetLogo';
 import { CardDetail } from '../components/CardDetail';
 import { CardTile } from '../components/CardTile';
 import { BusyModal, Chip, IconButton, ProgressBar, Segmented } from '../components/ui';
 import { loadSet } from '../storage';
-import { ownedKey, useStore } from '../store';
+import { useStore } from '../store';
 import { colors, finishColors } from '../theme';
 import { CardVariant, CATEGORY_LABELS, CATEGORY_ORDER, matchesQuery, VariantCategory } from '../variants';
 
 type Status = 'todas' | 'tenho' | 'faltam';
-interface Entry {
-  key: string;
-  card: StoredCard;
-  variant: CardVariant;
-}
 
 const CATEGORY_COLOR: Partial<Record<VariantCategory, string>> = {
   holo: finishColors.holo.bg,
@@ -38,21 +34,22 @@ const CATEGORY_COLOR: Partial<Record<VariantCategory, string>> = {
 export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { isOwned, ownedCount, toggleOwned, setOwned, upsertCollection, data } = useStore();
+  const { isOwned, toggleOwned, setOwned, upsertCollection, setRarityFilter, data } = useStore();
   const [set, setSet] = useState<StoredSet | null>(() => loadSet(setId));
   const [category, setCategory] = useState<VariantCategory | 'todas'>('todas');
   const [status, setStatus] = useState<Status>('todas');
-  const [rarity, setRarity] = useState<string | null>(null);
   const [rarityPicker, setRarityPicker] = useState(false);
   const [text, setText] = useState('');
   const [detail, setDetail] = useState<StoredCard | null>(null);
   const [busy, setBusy] = useState<{ title: string; done?: number; total?: number } | null>(null);
 
-  const entry = data.collections.find((c) => c.setId === setId);
-  const allEntries: Entry[] = useMemo(
-    () => (set?.cards ?? []).flatMap((card) => card.variants.map((variant) => ({ key: ownedKey(card.id, variant.key), card, variant }))),
-    [set],
-  );
+  const custom = data.custom[setId];
+  const allEntries: Entry[] = useMemo(() => (set ? setEntries(set, custom) : []), [set, custom]);
+
+  // filtro de raridade (várias escolhas), lembrado por coleção
+  const selectedRarities = useMemo(() => data.filters[setId]?.rarities ?? [], [data.filters, setId]);
+  const toggleRarity = (r: string) =>
+    setRarityFilter(setId, raritySet.has(r) ? selectedRarities.filter((x) => x !== r) : [...selectedRarities, r]);
 
   const catCounts = useMemo(() => {
     const m = new Map<VariantCategory, number>();
@@ -60,17 +57,17 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
     return m;
   }, [allEntries]);
 
-  const rarities = useMemo(() => [...new Set((set?.cards ?? []).map((c) => c.rarity).filter(Boolean) as string[])], [set]);
+  const rarities = useMemo(() => [...new Set((set?.cards ?? []).map((c) => c.rarity ?? 'Sem raridade'))], [set]);
+  // ignora raridades salvas que não existem mais nesta coleção
+  const raritySet = useMemo(() => new Set(selectedRarities.filter((r) => rarities.includes(r))), [selectedRarities, rarities]);
 
-  const filtered = useMemo(
+  // Base da contagem: tipo + raridade + texto (o filtro Tenho/Faltam só muda o que aparece na tela,
+  // senão "Tenho" daria sempre 100% e "Faltam" sempre 0%).
+  const base = useMemo(
     () =>
       allEntries.filter((e) => {
         if (category !== 'todas' && e.variant.category !== category) return false;
-        if (rarity && e.card.rarity !== rarity) return false;
-        if (status !== 'todas') {
-          const o = isOwned(setId, e.key);
-          if (status === 'tenho' ? !o : o) return false;
-        }
+        if (raritySet.size && !raritySet.has(e.card.rarity ?? 'Sem raridade')) return false;
         if (text.trim()) {
           const t = text.trim().replace(/^#/, '');
           if (/^\d+$/.test(t)) {
@@ -79,8 +76,22 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
         }
         return true;
       }),
-    [allEntries, category, rarity, status, text, isOwned, setId],
+    [allEntries, category, raritySet, text],
   );
+
+  const filtered = useMemo(
+    () =>
+      status === 'todas'
+        ? base
+        : base.filter((e) => {
+            const o = isOwned(setId, e.key);
+            return status === 'tenho' ? o : !o;
+          }),
+    [base, status, isOwned, setId],
+  );
+
+  const stats = useMemo(() => progress(base, (k) => isOwned(setId, k)), [base, isOwned, setId]);
+  const hasFilter = category !== 'todas' || raritySet.size > 0 || !!text.trim();
 
   const onToggle = useCallback((card: StoredCard, v: CardVariant) => toggleOwned(setId, ownedKey(card.id, v.key)), [toggleOwned, setId]);
   const onOpen = useCallback((card: StoredCard) => setDetail(card), []);
@@ -126,18 +137,23 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
 
   const cols = width >= 600 ? 5 : 3;
   const tileW = (width - 16 * 2 - cols * 8) / cols;
-  const owned = ownedCount(setId);
-  const total = entry?.totalVariants ?? allEntries.length;
+  const rarityLabel =
+    selectedRarities.length === 0 ? 'Raridade ▾' : selectedRarities.length === 1 ? selectedRarities[0] : `${selectedRarities.length} raridades`;
 
   const header = (
     <View>
       <View style={styles.summary}>
-        {set.logo ? <Image source={{ uri: assetUrl(set.logo) }} style={styles.logo} contentFit="contain" cachePolicy="disk" /> : null}
+        <SetLogo logo={set.logo} symbol={set.symbol} fallbackText={set.id} style={styles.logo} />
         <View style={{ flex: 1 }}>
-          <Text style={styles.summaryBig}>{`${owned} de ${total}`}</Text>
-          <Text style={styles.summarySub}>{`variantes · ${set.cards.length} cartas${set.releaseDate ? ` · ${set.releaseDate.slice(0, 4)}` : ''}`}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
+            <Text style={styles.summaryBig}>{`${stats.owned} de ${stats.total}`}</Text>
+            <Text style={[styles.pct, stats.pct >= 100 && { color: colors.gold }]}>{formatPct(stats.pct)}</Text>
+          </View>
+          <Text style={styles.summarySub}>
+            {hasFilter ? 'cartas com os filtros aplicados' : `cartas no master set${set.releaseDate ? ` · ${set.releaseDate.slice(0, 4)}` : ''}`}
+          </Text>
           <View style={{ marginTop: 8 }}>
-            <ProgressBar value={owned} total={total} height={8} />
+            <ProgressBar value={stats.owned} total={stats.total} height={8} />
           </View>
         </View>
       </View>
@@ -184,9 +200,9 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
             { value: 'faltam', label: 'Faltam' },
           ]}
         />
-        <Pressable onPress={() => setRarityPicker(true)} style={[styles.rarityBtn, rarity && { borderColor: colors.accent }]}>
+        <Pressable onPress={() => setRarityPicker(true)} style={[styles.rarityBtn, selectedRarities.length > 0 && { borderColor: colors.accent }]}>
           <Text style={styles.rarityText} numberOfLines={1}>
-            {rarity ?? 'Raridade ▾'}
+            {rarityLabel}
           </Text>
         </Pressable>
       </View>
@@ -238,26 +254,35 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
 
       <Modal visible={rarityPicker} transparent animationType="fade" onRequestClose={() => setRarityPicker(false)}>
         <Pressable style={styles.pickerBackdrop} onPress={() => setRarityPicker(false)}>
-          <View style={styles.picker}>
+          <Pressable style={styles.picker} onPress={() => {}}>
+            <Text style={styles.pickerTitle}>Raridades</Text>
+            <Text style={styles.pickerHint}>Escolha uma ou mais. Fica salvo para esta coleção.</Text>
             <ScrollView>
-              {[null, ...rarities].map((r) => (
-                <Pressable
-                  key={r ?? 'all'}
-                  style={styles.pickerItem}
-                  onPress={() => {
-                    setRarity(r);
-                    setRarityPicker(false);
-                  }}
-                >
-                  <Text style={[styles.pickerText, r === rarity && { color: colors.accent }]}>{r ?? 'Todas as raridades'}</Text>
-                </Pressable>
-              ))}
+              {rarities.map((r) => {
+                const on = raritySet.has(r);
+                const n = allEntries.filter((e) => (e.card.rarity ?? 'Sem raridade') === r).length;
+                return (
+                  <Pressable key={r} style={styles.pickerItem} onPress={() => toggleRarity(r)}>
+                    <View style={[styles.checkbox, on && styles.checkboxOn]}>{on ? <Text style={styles.checkboxTick}>✓</Text> : null}</View>
+                    <Text style={[styles.pickerText, on && { color: colors.text, fontWeight: '700' }]}>{r}</Text>
+                    <Text style={styles.pickerCount}>{n}</Text>
+                  </Pressable>
+                );
+              })}
             </ScrollView>
-          </View>
+            <View style={styles.pickerActions}>
+              <Pressable onPress={() => setRarityFilter(setId, [])} style={styles.pickerBtn}>
+                <Text style={{ color: colors.textDim, fontWeight: '700' }}>Limpar</Text>
+              </Pressable>
+              <Pressable onPress={() => setRarityPicker(false)} style={[styles.pickerBtn, { backgroundColor: colors.accent }]}>
+                <Text style={{ color: '#fff', fontWeight: '700' }}>Pronto</Text>
+              </Pressable>
+            </View>
+          </Pressable>
         </Pressable>
       </Modal>
 
-      <CardDetail setId={setId} card={detail} onClose={() => setDetail(null)} />
+      <CardDetail set={set} card={detail} onClose={() => setDetail(null)} />
       <BusyModal visible={!!busy} title={busy?.title ?? ''} done={busy?.done} total={busy?.total} />
     </View>
   );
@@ -271,6 +296,7 @@ const styles = StyleSheet.create({
   summary: { flexDirection: 'row', alignItems: 'center', gap: 14, marginHorizontal: 16, padding: 14, backgroundColor: colors.surface, borderRadius: 14, marginBottom: 12 },
   logo: { width: 96, height: 48 },
   summaryBig: { color: colors.text, fontSize: 20, fontWeight: '800' },
+  pct: { color: colors.accent, fontSize: 20, fontWeight: '800' },
   summarySub: { color: colors.textDim, fontSize: 12 },
   searchBox: {
     flexDirection: 'row',
@@ -294,7 +320,15 @@ const styles = StyleSheet.create({
   empty: { color: colors.textDim, textAlign: 'center', marginTop: 40 },
   retry: { backgroundColor: colors.accent, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10 },
   pickerBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 32 },
-  picker: { backgroundColor: colors.surface2, borderRadius: 14, maxHeight: '70%', paddingVertical: 6 },
-  pickerItem: { paddingHorizontal: 18, paddingVertical: 13 },
-  pickerText: { color: colors.text, fontSize: 15 },
+  picker: { backgroundColor: colors.surface2, borderRadius: 14, maxHeight: '75%', paddingTop: 16, paddingBottom: 12 },
+  pickerTitle: { color: colors.text, fontSize: 17, fontWeight: '800', paddingHorizontal: 18 },
+  pickerHint: { color: colors.textDim, fontSize: 12, paddingHorizontal: 18, marginTop: 2, marginBottom: 8 },
+  pickerItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 11, gap: 12 },
+  pickerText: { color: colors.textDim, fontSize: 15, flex: 1 },
+  pickerCount: { color: colors.textFaint, fontSize: 13 },
+  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  checkboxOn: { backgroundColor: colors.accent, borderColor: colors.accent },
+  checkboxTick: { color: '#fff', fontWeight: '900', fontSize: 13 },
+  pickerActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, paddingHorizontal: 18, paddingTop: 10 },
+  pickerBtn: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 10, backgroundColor: colors.surface },
 });
