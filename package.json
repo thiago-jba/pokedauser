@@ -1,0 +1,30 @@
+{
+  "name": "pokecolecao",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types tests/variants.test.ts"
+  },
+  "dependencies": {
+    "expo": "~57.0.0"
+  },
+  "devDependencies": {},
+  "appDependencies": [
+    "react",
+    "react-native",
+    "expo-status-bar",
+    "expo-image",
+    "expo-file-system",
+    "expo-sharing",
+    "expo-document-picker",
+    "react-native-safe-area-context"
+  ],
+  "appDevDependencies": [
+    "typescript",
+    "@types/react"
+  ]
+}

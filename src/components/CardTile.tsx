@@ -1,0 +1,95 @@
+import { Image } from 'expo-image';
+import React, { memo } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { imageUrl, StoredCard } from '../api';
+import { CARD_RATIO, colors, finishColors } from '../theme';
+import type { CardVariant } from '../variants';
+
+interface Props {
+  card: StoredCard;
+  variant: CardVariant;
+  owned: boolean;
+  width: number;
+  onToggle: (card: StoredCard, variant: CardVariant) => void;
+  onOpen: (card: StoredCard) => void;
+}
+
+function CardTileBase({ card, variant, owned, width, onToggle, onOpen }: Props) {
+  const fc = finishColors[variant.finish];
+  const h = width * CARD_RATIO;
+  const uri = imageUrl(card.image, 'low');
+
+  return (
+    <Pressable
+      onPress={() => onToggle(card, variant)}
+      onLongPress={() => onOpen(card)}
+      delayLongPress={300}
+      style={({ pressed }) => [{ width, margin: 4 }, pressed && { transform: [{ scale: 0.97 }] }]}
+      accessibilityLabel={`${card.name} ${variant.label}, ${owned ? 'tenho' : 'não tenho'}`}
+    >
+      <View style={[styles.frame, { height: h, borderColor: owned ? colors.gold : variant.finish === 'normal' ? 'transparent' : fc.bg }]}>
+        {uri ? (
+          <Image
+            source={{ uri }}
+            style={[StyleSheet.absoluteFill, !owned && { opacity: 0.35 }]}
+            contentFit="cover"
+            cachePolicy="disk"
+            transition={150}
+            recyclingKey={card.id}
+          />
+        ) : (
+          <View style={[StyleSheet.absoluteFill, styles.noImg]}>
+            <Text style={styles.noImgText} numberOfLines={3}>
+              {card.name}
+            </Text>
+          </View>
+        )}
+        {variant.finish !== 'normal' && (
+          <View pointerEvents="none" style={[styles.sheen, { backgroundColor: fc.bg }]} />
+        )}
+        {owned && (
+          <View style={styles.check}>
+            <Text style={styles.checkText}>✓</Text>
+          </View>
+        )}
+      </View>
+      <View style={[styles.badge, { backgroundColor: fc.bg }]}>
+        <Text style={[styles.badgeText, { color: fc.fg }]} numberOfLines={1}>
+          {variant.label}
+        </Text>
+      </View>
+      <Text style={[styles.name, !owned && { color: colors.textFaint }]} numberOfLines={1}>
+        {`#${card.localId} ${card.name}`}
+      </Text>
+    </Pressable>
+  );
+}
+
+export const CardTile = memo(CardTileBase);
+
+const styles = StyleSheet.create({
+  frame: {
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: colors.surface2,
+    borderWidth: 2,
+  },
+  sheen: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 3, opacity: 0.9 },
+  noImg: { alignItems: 'center', justifyContent: 'center', padding: 6 },
+  noImgText: { color: colors.textDim, fontSize: 11, textAlign: 'center' },
+  check: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkText: { color: '#1a1300', fontWeight: '900', fontSize: 13 },
+  badge: { marginTop: 4, borderRadius: 5, paddingHorizontal: 5, paddingVertical: 2 },
+  badgeText: { fontSize: 10, fontWeight: '700' },
+  name: { color: colors.text, fontSize: 11, marginTop: 2 },
+});

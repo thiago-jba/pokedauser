@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "Coleção TCG",
+    "slug": "pokecolecao",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#11121C",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#11121C"
+    },
+    "android": {
+      "package": "br.pessoal.colecaotcg",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#161826"
+      },
+      "edgeToEdgeEnabled": true
+    },
+    "plugins": []
+  }
+}

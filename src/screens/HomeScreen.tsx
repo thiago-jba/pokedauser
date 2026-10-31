@@ -1,0 +1,309 @@
+import * as DocumentPicker from 'expo-document-picker';
+import { Image } from 'expo-image';
+import * as Sharing from 'expo-sharing';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Alert,
+  FlatList,
+  Keyboard,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { assetUrl, fetchAllSets, fetchFullSet, SetSummary } from '../api';
+import { BusyModal, IconButton, ProgressBar } from '../components/ui';
+import {
+  buildBackup,
+  CollectionEntry,
+  loadSetsCache,
+  loadSetsCacheAnyAge,
+  readBackupFile,
+  restoreBackup,
+  saveSetsCache,
+  writeBackupFile,
+} from '../storage';
+import { useStore } from '../store';
+import { colors } from '../theme';
+import { matchesQuery } from '../variants';
+
+export function HomeScreen({ openSet }: { openSet: (setId: string) => void }) {
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const { data, ownedCount, upsertCollection, removeCollection, reload } = useStore();
+  const [query, setQuery] = useState('');
+  const [allSets, setAllSets] = useState<SetSummary[] | null>(() => loadSetsCache());
+  const [setsError, setSetsError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<{ title: string; done?: number; total?: number } | null>(null);
+  const [menu, setMenu] = useState(false);
+
+  const loadSets = useCallback(async () => {
+    setSetsError(null);
+    try {
+      const list = await fetchAllSets();
+      setAllSets(list);
+      saveSetsCache(list);
+    } catch {
+      const old = loadSetsCacheAnyAge();
+      if (old) setAllSets(old);
+      else setSetsError('Sem conexão para buscar as expansões. Toque para tentar de novo.');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!allSets) loadSets();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const addedIds = useMemo(() => new Set(data.collections.map((c) => c.setId)), [data.collections]);
+
+  const results = useMemo(() => {
+    if (!query.trim() || !allSets) return [];
+    return allSets.filter((s) => matchesQuery(`${s.namePt ?? ''} ${s.nameEn} ${s.id}`, query)).slice(0, 80);
+  }, [query, allSets]);
+
+  const addSet = async (s: SetSummary) => {
+    Keyboard.dismiss();
+    if (addedIds.has(s.id)) {
+      setQuery('');
+      openSet(s.id);
+      return;
+    }
+    const title = `Baixando ${s.namePt ?? s.nameEn}…`;
+    setBusy({ title });
+    try {
+      const full = await fetchFullSet(s.id, (done, total) => setBusy({ title, done, total }));
+      upsertCollection(full);
+      setBusy(null);
+      setQuery('');
+      openSet(full.id);
+    } catch (e) {
+      setBusy(null);
+      Alert.alert('Não foi possível baixar', 'Verifique a internet e tente de novo.');
+    }
+  };
+
+  const confirmRemove = (c: CollectionEntry) => {
+    Alert.alert('Remover coleção', `Remover "${c.namePt ?? c.nameEn}" e todas as marcações dela?`, [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Remover', style: 'destructive', onPress: () => removeCollection(c.setId) },
+    ]);
+  };
+
+  const exportBackup = async () => {
+    setMenu(false);
+    try {
+      const uri = writeBackupFile(buildBackup(data));
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: 'application/json', dialogTitle: 'Salvar backup da coleção' });
+      } else {
+        Alert.alert('Backup criado', uri);
+      }
+    } catch {
+      Alert.alert('Erro', 'Não foi possível gerar o backup.');
+    }
+  };
+
+  const importBackup = async () => {
+    setMenu(false);
+    const res = await DocumentPicker.getDocumentAsync({ type: ['application/json', '*/*'], copyToCacheDirectory: true });
+    if (res.canceled || !res.assets?.[0]) return;
+    try {
+      const b = await readBackupFile(res.assets[0].uri);
+      Alert.alert(
+        'Restaurar backup',
+        `Backup de ${b.exportedAt.slice(0, 10)} com ${b.data.collections.length} coleções. Isso substitui tudo o que está no app agora.`,
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Restaurar',
+            style: 'destructive',
+            onPress: () => {
+              restoreBackup(b);
+              reload();
+            },
+          },
+        ],
+      );
+    } catch (e: any) {
+      Alert.alert('Arquivo inválido', e?.message ?? 'Não consegui ler o backup.');
+    }
+  };
+
+  const colW = (width - 16 * 2 - 12) / 2;
+  const searching = query.trim().length > 0;
+
+  return (
+    <View style={[styles.root, { paddingTop: insets.top + 8 }]}>
+      <View style={styles.header}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.h1}>Minha Coleção</Text>
+          <Text style={styles.h2}>
+            {data.collections.length === 0
+              ? 'Nenhuma expansão adicionada'
+              : `${data.collections.length} ${data.collections.length === 1 ? 'expansão' : 'expansões'}`}
+          </Text>
+        </View>
+        <IconButton label="⋮" onPress={() => setMenu(true)} accessibilityLabel="Menu" />
+      </View>
+
+      <View style={styles.searchBox}>
+        <Text style={styles.searchIcon}>⌕</Text>
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Buscar expansão para adicionar…"
+          placeholderTextColor={colors.textFaint}
+          style={styles.searchInput}
+          autoCorrect={false}
+          returnKeyType="search"
+        />
+        {query ? (
+          <Pressable onPress={() => setQuery('')} hitSlop={10}>
+            <Text style={styles.clear}>✕</Text>
+          </Pressable>
+        ) : null}
+      </View>
+
+      {searching ? (
+        <FlatList
+          data={results}
+          keyExtractor={(s) => s.id}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 24 }}
+          ListEmptyComponent={
+            <Pressable onPress={setsError ? loadSets : undefined}>
+              <Text style={styles.empty}>
+                {setsError ?? (allSets ? 'Nenhuma expansão encontrada com esse nome.' : 'Carregando lista de expansões…')}
+              </Text>
+            </Pressable>
+          }
+          renderItem={({ item }) => (
+            <Pressable style={({ pressed }) => [styles.result, pressed && { backgroundColor: colors.surface2 }]} onPress={() => addSet(item)}>
+              <View style={styles.resultLogo}>
+                {item.logo ? <Image source={{ uri: assetUrl(item.logo) }} style={{ width: '100%', height: '100%' }} contentFit="contain" /> : null}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.resultName} numberOfLines={2}>
+                  {item.namePt ?? item.nameEn}
+                </Text>
+                <Text style={styles.resultSub} numberOfLines={1}>
+                  {[item.namePt && item.namePt !== item.nameEn ? item.nameEn : null, `${item.total} cartas`].filter(Boolean).join('  ·  ')}
+                </Text>
+              </View>
+              <Text style={[styles.addTag, addedIds.has(item.id) && styles.addedTag]}>{addedIds.has(item.id) ? 'Abrir' : '+ Adicionar'}</Text>
+            </Pressable>
+          )}
+        />
+      ) : (
+        <FlatList
+          data={data.collections}
+          keyExtractor={(c) => c.setId}
+          numColumns={2}
+          columnWrapperStyle={{ gap: 12 }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 24, gap: 12 }}
+          ListEmptyComponent={
+            <View style={styles.emptyBox}>
+              <Text style={styles.emptyTitle}>Comece sua coleção</Text>
+              <Text style={styles.empty}>Digite o nome de uma expansão no campo acima, por exemplo “Evoluções Prismáticas” ou “Fagulhas Impetuosas”.</Text>
+            </View>
+          }
+          renderItem={({ item }) => {
+            const owned = ownedCount(item.setId);
+            const total = item.totalVariants ?? 0;
+            const pct = total ? Math.round((owned / total) * 100) : 0;
+            return (
+              <Pressable
+                style={({ pressed }) => [styles.tile, { width: colW }, pressed && { opacity: 0.8 }]}
+                onPress={() => openSet(item.setId)}
+                onLongPress={() => confirmRemove(item)}
+              >
+                <View style={styles.tileLogo}>
+                  {item.logo ? <Image source={{ uri: assetUrl(item.logo) }} style={{ width: '100%', height: '100%' }} contentFit="contain" cachePolicy="disk" /> : null}
+                </View>
+                <Text style={styles.tileName} numberOfLines={2}>
+                  {item.namePt ?? item.nameEn}
+                </Text>
+                <Text style={styles.tileSub}>{`${owned} / ${total} · ${pct}%`}</Text>
+                <ProgressBar value={owned} total={total} />
+              </Pressable>
+            );
+          }}
+        />
+      )}
+
+      <Modal visible={menu} transparent animationType="fade" onRequestClose={() => setMenu(false)}>
+        <Pressable style={styles.menuBackdrop} onPress={() => setMenu(false)}>
+          <View style={[styles.menu, { top: insets.top + 56 }]}>
+            <Pressable style={styles.menuItem} onPress={exportBackup}>
+              <Text style={styles.menuText}>Exportar backup</Text>
+              <Text style={styles.menuSub}>Salvar no Drive, WhatsApp, e-mail…</Text>
+            </Pressable>
+            <Pressable style={styles.menuItem} onPress={importBackup}>
+              <Text style={styles.menuText}>Importar backup</Text>
+              <Text style={styles.menuSub}>Restaurar a partir de um arquivo</Text>
+            </Pressable>
+            <Pressable
+              style={styles.menuItem}
+              onPress={() => {
+                setMenu(false);
+                setAllSets(null);
+                loadSets();
+              }}
+            >
+              <Text style={styles.menuText}>Atualizar lista de expansões</Text>
+              <Text style={styles.menuSub}>Busca lançamentos novos</Text>
+            </Pressable>
+            <View style={styles.menuItem}>
+              <Text style={styles.menuSub}>Dica: segure o dedo sobre uma coleção para removê-la. Dados das cartas: TCGdex.</Text>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
+
+      <BusyModal visible={!!busy} title={busy?.title ?? ''} done={busy?.done} total={busy?.total} />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.bg },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, marginBottom: 12 },
+  h1: { color: colors.text, fontSize: 26, fontWeight: '800' },
+  h2: { color: colors.textDim, marginTop: 2 },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginBottom: 14,
+    paddingHorizontal: 12,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  searchIcon: { color: colors.textDim, fontSize: 20, marginRight: 6 },
+  searchInput: { flex: 1, color: colors.text, fontSize: 16, paddingVertical: 12 },
+  clear: { color: colors.textDim, fontSize: 16, paddingLeft: 8 },
+  result: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 8, borderRadius: 10, gap: 12 },
+  resultLogo: { width: 72, height: 36 },
+  resultName: { color: colors.text, fontWeight: '700', fontSize: 15 },
+  resultSub: { color: colors.textDim, fontSize: 12, marginTop: 2 },
+  addTag: { color: colors.accent, fontWeight: '700', fontSize: 13 },
+  addedTag: { color: colors.success },
+  tile: { backgroundColor: colors.surface, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: colors.border },
+  tileLogo: { height: 56, marginBottom: 10 },
+  tileName: { color: colors.text, fontWeight: '700', fontSize: 14, minHeight: 36 },
+  tileSub: { color: colors.textDim, fontSize: 12, marginTop: 4, marginBottom: 8 },
+  emptyBox: { paddingTop: 40, alignItems: 'center', paddingHorizontal: 20 },
+  emptyTitle: { color: colors.text, fontSize: 18, fontWeight: '700', marginBottom: 6 },
+  empty: { color: colors.textDim, textAlign: 'center', lineHeight: 20, marginTop: 16 },
+  menuBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
+  menu: { position: 'absolute', right: 16, width: 270, backgroundColor: colors.surface2, borderRadius: 12, paddingVertical: 4 },
+  menuItem: { paddingHorizontal: 16, paddingVertical: 12 },
+  menuText: { color: colors.text, fontWeight: '700' },
+  menuSub: { color: colors.textDim, fontSize: 12, marginTop: 2 },
+});
