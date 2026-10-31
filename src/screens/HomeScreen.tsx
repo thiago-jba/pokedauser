@@ -170,6 +170,7 @@ export function HomeScreen({ openSet }: { openSet: (setId: string) => void }) {
 
       {searching ? (
         <FlatList
+          key="resultados"
           data={results}
           keyExtractor={(s) => s.id}
           keyboardShouldPersistTaps="handled"
@@ -200,6 +201,7 @@ export function HomeScreen({ openSet }: { openSet: (setId: string) => void }) {
         />
       ) : (
         <FlatList
+          key="colecoes"
           data={data.collections}
           keyExtractor={(c) => c.setId}
           numColumns={2}

@@ -232,12 +232,14 @@ export function rarityPt(r?: string): string | undefined {
 }
 
 /** Remove acentos e deixa em minúsculas, para a busca. */
+const ACCENTS: Record<string, string> = {
+  á: 'a', à: 'a', â: 'a', ã: 'a', ä: 'a', é: 'e', è: 'e', ê: 'e', ë: 'e', í: 'i', ì: 'i', î: 'i', ï: 'i',
+  ó: 'o', ò: 'o', ô: 'o', õ: 'o', ö: 'o', ú: 'u', ù: 'u', û: 'u', ü: 'u', ç: 'c', ñ: 'n',
+};
+
 export function normalize(s: string): string {
-  return s
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .trim();
+  // não depende de String.normalize, que pode não existir em todos os celulares
+  return s.toLowerCase().replace(/[^\u0000-\u007f]/g, (ch) => ACCENTS[ch] ?? ch).trim();
 }
 
 /** Todas as palavras digitadas precisam aparecer no texto (em qualquer ordem). */

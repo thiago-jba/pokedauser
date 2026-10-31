@@ -2,6 +2,7 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
 import { BackHandler, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { SetScreen } from './src/screens/SetScreen';
 import { StoreProvider } from './src/store';
@@ -29,11 +30,13 @@ export default function App() {
       <StoreProvider>
         <View style={{ flex: 1, backgroundColor: colors.bg }}>
           <StatusBar style="light" />
-          {route.name === 'home' ? (
-            <HomeScreen openSet={(setId) => setRoute({ name: 'set', setId })} />
-          ) : (
-            <SetScreen key={route.setId} setId={route.setId} onBack={() => setRoute({ name: 'home' })} />
-          )}
+          <ErrorBoundary onReset={() => setRoute({ name: 'home' })}>
+            {route.name === 'home' ? (
+              <HomeScreen openSet={(setId) => setRoute({ name: 'set', setId })} />
+            ) : (
+              <SetScreen key={route.setId} setId={route.setId} onBack={() => setRoute({ name: 'home' })} />
+            )}
+          </ErrorBoundary>
         </View>
       </StoreProvider>
     </SafeAreaProvider>
