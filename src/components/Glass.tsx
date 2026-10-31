@@ -60,7 +60,11 @@ const styles = StyleSheet.create({
     opacity: 0.55,
   },
   edge: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.28)',
     borderLeftWidth: StyleSheet.hairlineWidth,
