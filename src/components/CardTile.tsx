@@ -78,7 +78,7 @@ export const CardTile = memo(CardTileBase);
 
 const styles = StyleSheet.create({
   frame: {
-    borderRadius: 8,
+    borderRadius: 10,
     overflow: 'hidden',
     backgroundColor: colors.surface2,
     borderWidth: 2,

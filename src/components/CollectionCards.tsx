@@ -4,6 +4,7 @@ import { formatPct } from '../collection';
 import { formatDateBr } from '../eras';
 import type { CollectionEntry } from '../storage';
 import { colors } from '../theme';
+import { GlassShine } from './Glass';
 import { SetLogo, SetSymbol } from './SetLogo';
 import { ProgressBar } from './ui';
 
@@ -52,6 +53,7 @@ export function CollectionTile({ item, st, onPress, onLongPress, width }: CardPr
         hideFallbackText
       />
       <View style={[StyleSheet.absoluteFill, styles.tileTint]} />
+      <GlassShine r={24} />
       <SetLogo setId={item.setId} logo={item.logo} symbol={item.symbol} style={styles.tileLogo} />
       {st.filtered ? (
         <View style={styles.filterBadge}>
@@ -89,6 +91,7 @@ export function CollectionRow({ item, st, onPress, onLongPress }: CardProps) {
       onPress={onPress}
       onLongPress={onLongPress}
     >
+      <GlassShine r={20} />
       <SetCodeBadge code={item.code} />
       <View style={{ flex: 1 }}>
         <View style={styles.rowTop}>
@@ -127,7 +130,7 @@ const styles = StyleSheet.create({
   codeText: { color: '#fff', fontWeight: '900', fontSize: 14, letterSpacing: 0.5 },
   codeTextSm: { fontSize: 10 },
 
-  tile: { backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
+  tile: { backgroundColor: colors.surface, borderRadius: 24, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, overflow: 'hidden' },
   tileTint: { backgroundColor: 'rgba(17,18,28,0.35)' },
   tileLogo: { position: 'absolute', top: 10, left: 10, right: 10, bottom: 86 },
   tileInfo: {
@@ -138,7 +141,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingTop: 8,
     paddingBottom: 10,
-    backgroundColor: 'rgba(12,13,22,0.82)',
+    backgroundColor: 'rgba(14,15,30,0.62)',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.18)',
   },
   tileTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
   tileDate: { color: colors.textDim, fontSize: 10, fontWeight: '600' },
@@ -155,11 +160,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
+    overflow: 'hidden',
   },
   rowTop: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 },
   rowName: { color: colors.text, fontWeight: '700', fontSize: 15, flex: 1 },

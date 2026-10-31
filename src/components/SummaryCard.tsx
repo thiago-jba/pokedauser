@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { formatPct } from '../collection';
 import { colors } from '../theme';
 import { Donut } from './Donut';
+import { GlassShine } from './Glass';
 
 /** 12345 -> "12.345" */
 export const fmtInt = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
@@ -29,6 +30,7 @@ export function SummaryCard({
   const pct = total ? (owned / total) * 100 : 0;
   return (
     <View style={styles.card}>
+      <GlassShine r={28} />
       <View style={styles.top}>
         <View style={{ flex: 1 }}>
           <View style={styles.bigRow}>
@@ -76,10 +78,11 @@ function Row({ label, value, hint }: { label: string; value: string; hint?: stri
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
-    borderRadius: 18,
-    borderWidth: 1,
+    borderRadius: 28,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    padding: 16,
+    overflow: 'hidden',
+    padding: 18,
     marginBottom: 6,
   },
   top: { flexDirection: 'row', alignItems: 'center', gap: 12 },

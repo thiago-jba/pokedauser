@@ -1,6 +1,7 @@
+import { Image } from 'expo-image';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
-import { BackHandler, View } from 'react-native';
+import { BackHandler, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { UpdateBanner } from './src/components/UpdateBanner';
@@ -30,6 +31,8 @@ export default function App() {
     <SafeAreaProvider>
       <StoreProvider>
         <View style={{ flex: 1, backgroundColor: colors.bg }}>
+          {/* papel de parede fixo: o "vidro" dos painéis deixa ele aparecer */}
+          <Image source={require('./assets/wallpaper.jpg')} style={StyleSheet.absoluteFill} contentFit="cover" />
           <StatusBar style="light" />
           <ErrorBoundary onReset={() => setRoute({ name: 'home' })}>
             {route.name === 'home' ? (

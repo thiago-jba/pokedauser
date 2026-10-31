@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchAllSets, fetchFullSet, fetchSetInfo, SetSummary } from '../api';
 import { applySavedFilters, formatPct, progress, setEntries } from '../collection';
 import { CollectionRow, CollectionTile } from '../components/CollectionCards';
+import { GlassShine } from '../components/Glass';
 import { SummaryCard } from '../components/SummaryCard';
 import { cachedRates, collectionValue, fetchSetPrices, fmtMoney, getRates, loadSetPrices, saveSetPrices } from '../prices';
 import type { Rates } from '../prices';
@@ -304,6 +305,7 @@ export function HomeScreen({ openSet }: { openSet: (setId: string) => void }) {
       </View>
 
       <View style={styles.searchBox}>
+        <GlassShine r={999} />
         <Text style={styles.searchIcon}>⌕</Text>
         <TextInput
           value={query}
@@ -324,6 +326,7 @@ export function HomeScreen({ openSet }: { openSet: (setId: string) => void }) {
       {!searching && data.collections.length > 0 ? (
         <View style={styles.toolbar}>
           <Pressable style={styles.sortBtn} onPress={() => setSortPicker(true)} hitSlop={6}>
+            <GlassShine r={999} />
             <Text style={styles.sortLabel}>Ordenar</Text>
             <Text style={styles.sortValue} numberOfLines={1}>
               {sortLabel(sort)} ▾
@@ -504,25 +507,26 @@ export function HomeScreen({ openSet }: { openSet: (setId: string) => void }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
+  root: { flex: 1, backgroundColor: 'transparent' },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, marginBottom: 12 },
-  h1: { color: colors.text, fontSize: 26, fontWeight: '800' },
+  h1: { color: colors.text, fontSize: 34, fontWeight: '900', letterSpacing: -0.5 },
   h2: { color: colors.textDim, marginTop: 2 },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: 16,
     marginBottom: 14,
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
+    overflow: 'hidden',
   },
   searchIcon: { color: colors.textDim, fontSize: 20, marginRight: 6 },
   searchInput: { flex: 1, color: colors.text, fontSize: 16, paddingVertical: 12 },
   clear: { color: colors.textDim, fontSize: 16, paddingLeft: 8 },
-  result: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 8, borderRadius: 10, gap: 12 },
+  result: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 10, borderRadius: 16, gap: 12 },
   resultLogo: { width: 72, height: 36 },
   resultName: { color: colors.text, fontWeight: '700', fontSize: 15 },
   resultSub: { color: colors.textDim, fontSize: 12, marginTop: 2 },
@@ -535,16 +539,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     backgroundColor: colors.surface,
-    borderRadius: 10,
-    borderWidth: 1,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    overflow: 'hidden',
   },
   sortLabel: { color: colors.textFaint, fontSize: 12 },
   sortValue: { color: colors.text, fontSize: 13, fontWeight: '700', flexShrink: 1 },
-  viewToggle: { flexDirection: 'row', backgroundColor: colors.surface, borderRadius: 10, borderWidth: 1, borderColor: colors.border, padding: 3 },
-  viewBtn: { width: 38, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 7 },
+  viewToggle: { flexDirection: 'row', backgroundColor: colors.surface, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, padding: 3 },
+  viewBtn: { width: 40, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 999 },
   viewBtnOn: { backgroundColor: colors.surface2 },
   viewBtnText: { color: colors.textFaint, fontSize: 18 },
   eraHeader: {
@@ -561,7 +566,7 @@ const styles = StyleSheet.create({
   eraName: { color: colors.gold, fontSize: 14, fontWeight: '900', letterSpacing: 0.8, flex: 1 },
   eraCount: { color: colors.textDim, fontSize: 12 },
   sortBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 28 },
-  sortBox: { backgroundColor: colors.surface2, borderRadius: 14, paddingVertical: 12 },
+  sortBox: { backgroundColor: colors.sheet, borderRadius: 24, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, paddingVertical: 12 },
   sortTitle: { color: colors.text, fontSize: 16, fontWeight: '800', paddingHorizontal: 18, marginBottom: 6 },
   sortItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingVertical: 12 },
   sortItemText: { color: colors.text, fontSize: 15 },
@@ -569,7 +574,7 @@ const styles = StyleSheet.create({
   emptyTitle: { color: colors.text, fontSize: 18, fontWeight: '700', marginBottom: 6 },
   empty: { color: colors.textDim, textAlign: 'center', lineHeight: 20, marginTop: 16 },
   menuBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
-  menu: { position: 'absolute', right: 16, width: 270, backgroundColor: colors.surface2, borderRadius: 12, paddingVertical: 4 },
+  menu: { position: 'absolute', right: 16, width: 270, backgroundColor: colors.sheet, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, paddingVertical: 4 },
   menuItem: { paddingHorizontal: 16, paddingVertical: 12 },
   menuText: { color: colors.text, fontWeight: '700' },
   menuSub: { color: colors.textDim, fontSize: 12, marginTop: 2 },

@@ -240,7 +240,7 @@ export function CardDetail({ set, card, onClose }: { set: StoredSet; card: Store
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', padding: 12 },
-  sheet: { backgroundColor: colors.surface, borderRadius: 18, maxHeight: '92%' },
+  sheet: { backgroundColor: colors.sheet, borderRadius: 28, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, overflow: 'hidden', maxHeight: '92%' },
   title: { color: colors.text, fontSize: 20, fontWeight: '800', marginTop: 14, textAlign: 'center' },
   sub: { color: colors.textDim, marginTop: 4, textAlign: 'center' },
   section: { color: colors.textDim, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', alignSelf: 'flex-start', marginTop: 18, marginBottom: 6, letterSpacing: 0.6 },

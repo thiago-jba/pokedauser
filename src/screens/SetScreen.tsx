@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchFullSet, StoredCard, StoredSet } from '../api';
 import { allCards, applySavedFilters, Entry, formatPct, ownedKey, progress, setEntries } from '../collection';
 import { SetCodeBadge } from '../components/CollectionCards';
+import { GlassShine } from '../components/Glass';
 import { SetLogo } from '../components/SetLogo';
 import { eraPt, formatDateBr, parseDateBr } from '../eras';
 import {
@@ -187,6 +188,7 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
   const header = (
     <View>
       <View style={styles.summary}>
+        <GlassShine r={24} />
         <SetLogo setId={set.id} logo={set.logo} symbol={set.symbol} style={styles.logo} />
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
@@ -201,6 +203,7 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
       </View>
 
       <View style={styles.valueBox}>
+        <GlassShine r={20} />
         <View style={{ flex: 1 }}>
           <Text style={styles.valueLabel}>{hasFilter ? 'Valor do que tenho (com filtros)' : 'Valor do que tenho'}</Text>
           <Text style={styles.valueHint}>
@@ -240,6 +243,7 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
       </View>
 
       <View style={styles.searchBox}>
+        <GlassShine r={999} />
         <TextInput
           value={text}
           onChangeText={setText}
@@ -410,11 +414,23 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
+  root: { flex: 1, backgroundColor: 'transparent' },
   topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, marginBottom: 8 },
   title: { color: colors.text, fontSize: 19, fontWeight: '800' },
   subtitle: { color: colors.textDim, fontSize: 12 },
-  summary: { flexDirection: 'row', alignItems: 'center', gap: 14, marginHorizontal: 16, padding: 14, backgroundColor: colors.surface, borderRadius: 14, marginBottom: 12 },
+  summary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginHorizontal: 16,
+    padding: 16,
+    backgroundColor: colors.surface,
+    borderRadius: 24,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
   logo: { width: 96, height: 48 },
   summaryBig: { color: colors.text, fontSize: 20, fontWeight: '800' },
   pct: { color: colors.accent, fontSize: 20, fontWeight: '800' },
@@ -426,9 +442,12 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: -4,
     marginBottom: 12,
-    padding: 12,
+    padding: 14,
     backgroundColor: colors.surface,
-    borderRadius: 12,
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    overflow: 'hidden',
   },
   valueLabel: { color: colors.text, fontWeight: '800', fontSize: 13 },
   valueHint: { color: colors.textFaint, fontSize: 11, marginTop: 2 },
@@ -455,16 +474,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginHorizontal: 16,
     marginBottom: 12,
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     backgroundColor: colors.surface,
-    borderRadius: 10,
-    borderWidth: 1,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
+    overflow: 'hidden',
   },
-  searchInput: { flex: 1, color: colors.text, fontSize: 15, paddingVertical: 10 },
+  searchInput: { flex: 1, color: colors.text, fontSize: 15, paddingVertical: 11 },
   label: { color: colors.textFaint, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6, marginHorizontal: 16, marginBottom: 6 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16 },
-  rarityBtn: { maxWidth: 140, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  rarityBtn: { maxWidth: 140, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, backgroundColor: colors.surface },
   rarityText: { color: colors.text, fontSize: 13, fontWeight: '600' },
   countRow: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginTop: 12, marginBottom: 6 },
   countText: { color: colors.textFaint, fontSize: 12, flex: 1 },
@@ -472,7 +492,7 @@ const styles = StyleSheet.create({
   empty: { color: colors.textDim, textAlign: 'center', marginTop: 40 },
   retry: { backgroundColor: colors.accent, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10 },
   pickerBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 32 },
-  picker: { backgroundColor: colors.surface2, borderRadius: 14, maxHeight: '75%', paddingTop: 16, paddingBottom: 12 },
+  picker: { backgroundColor: colors.sheet, borderRadius: 24, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, maxHeight: '75%', paddingTop: 16, paddingBottom: 12 },
   pickerTitle: { color: colors.text, fontSize: 17, fontWeight: '800', paddingHorizontal: 18 },
   pickerHint: { color: colors.textDim, fontSize: 12, paddingHorizontal: 18, marginTop: 2, marginBottom: 8 },
   pickerItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 11, gap: 12 },

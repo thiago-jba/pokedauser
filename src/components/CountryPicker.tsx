@@ -72,7 +72,7 @@ export function CountryPicker({
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 20 },
-  box: { backgroundColor: colors.surface2, borderRadius: 16, padding: 14, height: '80%' },
+  box: { backgroundColor: colors.sheet, borderRadius: 26, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, padding: 14, height: '80%' },
   title: { color: colors.text, fontSize: 17, fontWeight: '800', marginBottom: 10 },
   input: {
     color: colors.text,
