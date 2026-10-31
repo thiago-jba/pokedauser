@@ -22,6 +22,8 @@ export interface StoredCard {
   id: string;
   localId: string;
   name: string;
+  /** nome em inglês (usado nos links da Liga Pokémon e Jornada Games) */
+  nameEn?: string;
   /** URL base da imagem (sem /low.webp); prefere a versão em português */
   image?: string;
   rarity?: string;
@@ -167,6 +169,7 @@ export async function fetchFullSet(
       id: brief.id,
       localId: String(brief.localId),
       name: p?.name ?? brief.name,
+      nameEn: brief.name,
       image: p?.image ?? brief.image ?? detail?.image,
       rarity: rarityPt(detail?.rarity),
       category: detail?.category,

@@ -1,10 +1,20 @@
 import { Image } from 'expo-image';
-import React, { useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Alert, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { imageUrl, StoredCard, StoredSet } from '../api';
 import { cardVariants, ownedKey } from '../collection';
 import { countryName, flagEmoji } from '../countries';
 import { CountryPicker } from './CountryPicker';
+import {
+  cachedRates,
+  fetchCardPrices,
+  fmtMoney,
+  getRates,
+  jornadaUrl,
+  ligaUrl,
+  loadSetPrices,
+} from '../prices';
+import type { Rates, VariantPrice } from '../prices';
 import { useStore } from '../store';
 import { CARD_RATIO, colors, finishColors } from '../theme';
 import { ApiVariantDetailed, CATEGORY_LABELS, classifyDetailed, FOIL_PT } from '../variants';
@@ -25,11 +35,40 @@ export function CardDetail({ set, card, onClose }: { set: StoredSet; card: Store
   const [type, setType] = useState('holo');
   const [foil, setFoil] = useState<string | null>(null);
   const [promo, setPromo] = useState(true);
+  const [livePrices, setLivePrices] = useState<Record<string, VariantPrice> | null>(null);
+  const [nameEn, setNameEn] = useState<string | undefined>(undefined);
+  const [loadingPrices, setLoadingPrices] = useState(false);
+  const [rates, setRates] = useState<Rates | null>(() => cachedRates());
+
+  // preços atualizados direto da fonte sempre que abre a carta
+  useEffect(() => {
+    if (!card) return;
+    let alive = true;
+    setLivePrices(null);
+    setLoadingPrices(true);
+    fetchCardPrices(card.id)
+      .then((r) => {
+        if (!alive || !r) return;
+        setLivePrices(r.prices);
+        setNameEn(r.name);
+      })
+      .finally(() => alive && setLoadingPrices(false));
+    getRates().then((r) => alive && r && setRates(r));
+    return () => {
+      alive = false;
+    };
+  }, [card?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!card) return null;
   const setId = set.id;
   const imgW = Math.min(width - 48, (height * 0.5) / CARD_RATIO);
   const variants = cardVariants(set, card, data.custom[setId]);
+  const cached = loadSetPrices(setId);
+  const prices = livePrices ?? cached?.cards[card.id] ?? {};
+  const code = data.collections.find((c) => c.setId === setId)?.code ?? set.code;
+  const enName = card.nameEn ?? nameEn ?? cached?.names[card.id];
+  const brl = (v: number | undefined, rate: number | undefined) => (v && rate ? ` (${fmtMoney(v * rate, 'R$')})` : '');
+  const open = (url: string) => Linking.openURL(url).catch(() => Alert.alert('Não foi possível abrir o site'));
 
   const draft: ApiVariantDetailed = { type, ...(foil ? { foil } : {}), ...(promo ? { promo: true } : {}) };
   const draftLabel = classifyDetailed(draft, set.isPromoSet).label;
@@ -88,6 +127,28 @@ export function CardDetail({ set, card, onClose }: { set: StoredSet; card: Store
                         <Text style={styles.remove}>Remover</Text>
                       </Pressable>
                     ) : null}
+                    {(() => {
+                      const vp = prices[v.key];
+                      if (!vp) return <Text style={styles.priceNone}>{loadingPrices ? 'buscando preço…' : 'sem preço no TCGplayer/Cardmarket'}</Text>;
+                      return (
+                        <View style={styles.priceBox}>
+                          {vp.tcg ? (
+                            <Text style={styles.priceLine}>
+                              <Text style={styles.priceSrc}>TCGplayer </Text>
+                              {fmtMoney(vp.tcg, 'US$')}
+                              <Text style={styles.priceBrl}>{brl(vp.tcg, rates?.usd)}</Text>
+                            </Text>
+                          ) : null}
+                          {vp.cm ? (
+                            <Text style={styles.priceLine}>
+                              <Text style={styles.priceSrc}>Cardmarket </Text>
+                              {fmtMoney(vp.cm, '€')}
+                              <Text style={styles.priceBrl}>{brl(vp.cm, rates?.eur)}</Text>
+                            </Text>
+                          ) : null}
+                        </View>
+                      );
+                    })()}
                     {country ? (
                       <Pressable hitSlop={6} onPress={() => setPickingFor(k)} style={styles.countryBtn}>
                         <Text style={styles.countryFlag}>{flagEmoji(country)}</Text>
@@ -104,6 +165,20 @@ export function CardDetail({ set, card, onClose }: { set: StoredSet; card: Store
                 </Pressable>
               );
             })}
+
+            <Text style={styles.priceNote}>Menor preço anunciado em cada site. Conversão para reais pela cotação do dia.</Text>
+
+            <Text style={styles.section}>Preço no Brasil</Text>
+            <View style={styles.storeRow}>
+              <Pressable style={styles.storeBtn} onPress={() => open(ligaUrl(card, set, code, enName))}>
+                <Text style={styles.storeName}>Liga Pokémon</Text>
+                <Text style={styles.storeHint}>abrir a carta no site ↗</Text>
+              </Pressable>
+              <Pressable style={styles.storeBtn} onPress={() => open(jornadaUrl(card, set, enName))}>
+                <Text style={styles.storeName}>Jornada Games</Text>
+                <Text style={styles.storeHint}>buscar a carta no site ↗</Text>
+              </Pressable>
+            </View>
 
             {!adding ? (
               <Pressable onPress={() => setAdding(true)} style={styles.addLink}>
@@ -173,6 +248,16 @@ const styles = StyleSheet.create({
   dot: { width: 12, height: 12, borderRadius: 6, marginRight: 12 },
   rowTitle: { color: colors.text, fontWeight: '600' },
   rowSub: { color: colors.textFaint, fontSize: 12 },
+  priceBox: { marginTop: 4, gap: 1 },
+  priceLine: { color: colors.text, fontSize: 12, fontWeight: '700' },
+  priceSrc: { color: colors.textFaint, fontWeight: '600' },
+  priceBrl: { color: colors.textDim, fontWeight: '600' },
+  priceNone: { color: colors.textFaint, fontSize: 11, marginTop: 4 },
+  priceNote: { color: colors.textFaint, fontSize: 11, alignSelf: 'flex-start', marginTop: 8 },
+  storeRow: { flexDirection: 'row', gap: 10, width: '100%' },
+  storeBtn: { flex: 1, backgroundColor: colors.surface2, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 12, borderWidth: 1, borderColor: colors.border },
+  storeName: { color: colors.text, fontWeight: '800', fontSize: 14 },
+  storeHint: { color: colors.accent, fontSize: 11, fontWeight: '700', marginTop: 2 },
   countryBtn: {
     flexDirection: 'row',
     alignItems: 'center',

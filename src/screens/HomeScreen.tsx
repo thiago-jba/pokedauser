@@ -18,6 +18,8 @@ import { fetchAllSets, fetchFullSet, fetchSetInfo, SetSummary } from '../api';
 import { applySavedFilters, formatPct, progress, setEntries } from '../collection';
 import { CollectionRow, CollectionTile } from '../components/CollectionCards';
 import { SummaryCard } from '../components/SummaryCard';
+import { cachedRates, collectionValue, fetchSetPrices, fmtMoney, getRates, loadSetPrices, saveSetPrices } from '../prices';
+import type { Rates } from '../prices';
 import { eraPt, eraRank, HOME_SORTS, normalizeSort, sortLabel } from '../eras';
 import { SetLogo } from '../components/SetLogo';
 import { BusyModal, IconButton } from '../components/ui';
@@ -42,20 +44,27 @@ export function HomeScreen({ openSet }: { openSet: (setId: string) => void }) {
   const { width } = useWindowDimensions();
   const { data, isOwned, upsertCollection, removeCollection, reload, setHomeSort, setHomeView, toggleEra, patchCollection } = useStore();
   const [sortPicker, setSortPicker] = useState(false);
+  const [rates, setRates] = useState<Rates | null>(() => cachedRates());
+  const [pricesVersion, setPricesVersion] = useState(0);
+  useEffect(() => {
+    getRates().then((r) => r && setRates(r));
+  }, []);
   const sort = normalizeSort(data.homeSort);
 
   // progresso de cada coleção: todas as variantes (inclusive correções e as adicionadas à mão),
   // com o último filtro de tipo/raridade aplicado naquela coleção — igual à tela da coleção
   const stats = useMemo(() => {
-    const m: Record<string, { owned: number; total: number; pct: number; filtered: boolean }> = {};
+    const m: Record<string, { owned: number; total: number; pct: number; filtered: boolean; tcg: number; cm: number }> = {};
     for (const c of data.collections) {
       const set = loadSet(c.setId);
       if (!set) continue;
       const f = applySavedFilters(setEntries(set, data.custom[c.setId]), data.filters[c.setId]);
-      m[c.setId] = { ...progress(f.list, (k) => isOwned(c.setId, k)), filtered: f.active };
+      const owned = (k: string) => isOwned(c.setId, k);
+      const v = collectionValue(f.list, owned, loadSetPrices(c.setId));
+      m[c.setId] = { ...progress(f.list, owned), filtered: f.active, tcg: v.tcg, cm: v.cm };
     }
     return m;
-  }, [data.collections, data.custom, data.filters, isOwned]);
+  }, [data.collections, data.custom, data.filters, isOwned, pricesVersion]);
 
   // Coleções agrupadas por era (ordem fixa das eras); dentro de cada era, a ordenação escolhida.
   const groups = useMemo(() => {
@@ -98,15 +107,19 @@ export function HomeScreen({ openSet }: { openSet: (setId: string) => void }) {
     let total = 0;
     let complete = 0;
     let filteredCount = 0;
+    let tcg = 0;
+    let cm = 0;
     for (const c of data.collections) {
       const st = stats[c.setId];
       if (!st) continue;
+      tcg += st.tcg;
+      cm += st.cm;
       owned += st.owned;
       total += st.total;
       if (st.total > 0 && st.owned >= st.total) complete++;
       if (st.filtered) filteredCount++;
     }
-    return { owned, total, complete, filteredCount };
+    return { owned, total, complete, filteredCount, tcg, cm };
   }, [data.collections, stats]);
 
   // Linhas da lista: cabeçalho da era + coleções (em pares na visualização em quadros)
@@ -202,6 +215,27 @@ export function HomeScreen({ openSet }: { openSet: (setId: string) => void }) {
     } catch (e) {
       setBusy(null);
       Alert.alert('Não foi possível baixar', 'Verifique a internet e tente de novo.');
+    }
+  };
+
+  const refreshAllPrices = async () => {
+    setMenu(false);
+    const list = data.collections.map((c) => loadSet(c.setId)).filter((x): x is NonNullable<typeof x> => !!x);
+    try {
+      for (let i = 0; i < list.length; i++) {
+        const set = list[i];
+        const title = `Atualizando preços (${i + 1}/${list.length}) — ${set.namePt ?? set.nameEn}`;
+        setBusy({ title });
+        const p = await fetchSetPrices(set, (done, total) => setBusy({ title, done, total }));
+        saveSetPrices(set.id, p);
+      }
+      const r = await getRates();
+      if (r) setRates(r);
+    } catch {
+      Alert.alert('Sem conexão', 'Não foi possível atualizar todos os preços agora.');
+    } finally {
+      setBusy(null);
+      setPricesVersion((v) => v + 1);
     }
   };
 
@@ -353,6 +387,18 @@ export function HomeScreen({ openSet }: { openSet: (setId: string) => void }) {
                 collections={data.collections.length}
                 complete={summary.complete}
                 filteredCount={summary.filteredCount}
+                extraRows={[
+                  {
+                    label: 'Valor da coleção (TCGplayer)',
+                    value: rates ? fmtMoney(summary.tcg * rates.usd, 'R$') : fmtMoney(summary.tcg, 'US$'),
+                    hint: `${fmtMoney(summary.tcg, 'US$')} · menor preço nos EUA`,
+                  },
+                  {
+                    label: 'Valor da coleção (Cardmarket)',
+                    value: rates ? fmtMoney(summary.cm * rates.eur, 'R$') : fmtMoney(summary.cm, '€'),
+                    hint: `${fmtMoney(summary.cm, '€')} · menor preço na Europa`,
+                  },
+                ]}
               />
             ) : null
           }
@@ -428,6 +474,10 @@ export function HomeScreen({ openSet }: { openSet: (setId: string) => void }) {
             <Pressable style={styles.menuItem} onPress={importBackup}>
               <Text style={styles.menuText}>Importar backup</Text>
               <Text style={styles.menuSub}>Restaurar a partir de um arquivo</Text>
+            </Pressable>
+            <Pressable style={styles.menuItem} onPress={refreshAllPrices}>
+              <Text style={styles.menuText}>Atualizar preços de todas as coleções</Text>
+              <Text style={styles.menuSub}>TCGplayer e Cardmarket (atualizam sozinhos 1x por dia ao abrir a coleção)</Text>
             </Pressable>
             <Pressable
               style={styles.menuItem}

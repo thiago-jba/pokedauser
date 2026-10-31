@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { StoredSet } from './api';
 import { ownedKey, setEntries } from './collection';
+import { deleteSetPrices } from './prices';
 import { AppData, CollectionEntry, deleteSet, loadData, saveData, saveSet } from './storage';
 import { DEFAULT_COUNTRY } from './countries';
 import { ApiVariantDetailed, variantKey } from './variants';
@@ -107,6 +108,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const removeCollection = useCallback((setId: string) => {
     deleteSet(setId);
+    deleteSetPrices(setId);
     setData((d) => {
       const owned = { ...d.owned };
       const custom = { ...d.custom };

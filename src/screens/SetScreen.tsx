@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -17,6 +17,17 @@ import { allCards, applySavedFilters, Entry, formatPct, ownedKey, progress, setE
 import { SetCodeBadge } from '../components/CollectionCards';
 import { SetLogo } from '../components/SetLogo';
 import { eraPt, formatDateBr, parseDateBr } from '../eras';
+import {
+  cachedRates,
+  collectionValue,
+  fetchSetPrices,
+  fmtMoney,
+  getRates,
+  loadSetPrices,
+  pricesAreStale,
+  saveSetPrices,
+} from '../prices';
+import type { Rates, SetPrices } from '../prices';
 import { CardDetail } from '../components/CardDetail';
 import { CardTile } from '../components/CardTile';
 import { BusyModal, Chip, IconButton, ProgressBar, Segmented } from '../components/ui';
@@ -39,6 +50,9 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
   const { isOwned, ownedCountry, toggleOwned, setOwned, upsertCollection, setRarityFilter, setCategoryFilter, patchCollection, data } = useStore();
   const entry = data.collections.find((c) => c.setId === setId);
   const [editingDate, setEditingDate] = useState<string | null>(null);
+  const [setPrices, setSetPrices] = useState<SetPrices | null>(() => loadSetPrices(setId));
+  const [priceProgress, setPriceProgress] = useState<string | null>(null);
+  const [rates, setRates] = useState<Rates | null>(() => cachedRates());
   const [set, setSet] = useState<StoredSet | null>(() => loadSet(setId));
   const [status, setStatus] = useState<Status>('todas');
   const [rarityPicker, setRarityPicker] = useState(false);
@@ -102,6 +116,25 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
   );
 
   const stats = useMemo(() => progress(base, (k) => isOwned(setId, k)), [base, isOwned, setId]);
+  const value = useMemo(() => collectionValue(base, (k) => isOwned(setId, k), setPrices), [base, isOwned, setId, setPrices]);
+
+  // preços: atualiza em segundo plano uma vez por dia
+  useEffect(() => {
+    getRates().then((r) => r && setRates(r));
+    if (!set || !pricesAreStale(setPrices)) return;
+    let alive = true;
+    setPriceProgress('atualizando preços…');
+    fetchSetPrices(set, (d, t) => alive && setPriceProgress(`atualizando preços ${d}/${t}`))
+      .then((p) => {
+        saveSetPrices(setId, p);
+        if (alive) setSetPrices(p);
+      })
+      .catch(() => {})
+      .finally(() => alive && setPriceProgress(null));
+    return () => {
+      alive = false;
+    };
+  }, [set?.fetchedAt]); // eslint-disable-line react-hooks/exhaustive-deps
   const hasFilter = catSet.size > 0 || raritySet.size > 0 || !!text.trim();
 
   const onToggle = useCallback((card: StoredCard, v: CardVariant) => toggleOwned(setId, ownedKey(card.id, v.key)), [toggleOwned, setId]);
@@ -164,6 +197,28 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
           <View style={{ marginTop: 8 }}>
             <ProgressBar value={stats.owned} total={stats.total} height={8} />
           </View>
+        </View>
+      </View>
+
+      <View style={styles.valueBox}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.valueLabel}>{hasFilter ? 'Valor do que tenho (com filtros)' : 'Valor do que tenho'}</Text>
+          <Text style={styles.valueHint}>
+            {priceProgress ??
+              (value.ownedCount === 0
+                ? 'marque cartas para ver o valor'
+                : `${value.priced} de ${value.ownedCount} com preço · menor preço anunciado`)}
+          </Text>
+        </View>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={styles.valueLine}>
+            <Text style={styles.valueSrc}>TCGplayer </Text>
+            {rates && value.tcg ? fmtMoney(value.tcg * rates.usd, 'R$') : fmtMoney(value.tcg || undefined, 'US$')}
+          </Text>
+          <Text style={styles.valueLine}>
+            <Text style={styles.valueSrc}>Cardmarket </Text>
+            {rates && value.cm ? fmtMoney(value.cm * rates.eur, 'R$') : fmtMoney(value.cm || undefined, '€')}
+          </Text>
         </View>
       </View>
 
@@ -364,6 +419,21 @@ const styles = StyleSheet.create({
   summaryBig: { color: colors.text, fontSize: 20, fontWeight: '800' },
   pct: { color: colors.accent, fontSize: 20, fontWeight: '800' },
   summarySub: { color: colors.textDim, fontSize: 12 },
+  valueBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 16,
+    marginTop: -4,
+    marginBottom: 12,
+    padding: 12,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+  },
+  valueLabel: { color: colors.text, fontWeight: '800', fontSize: 13 },
+  valueHint: { color: colors.textFaint, fontSize: 11, marginTop: 2 },
+  valueLine: { color: colors.text, fontWeight: '800', fontSize: 13 },
+  valueSrc: { color: colors.textFaint, fontWeight: '600', fontSize: 11 },
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginTop: -4, marginBottom: 12 },
   infoEra: { color: colors.gold, fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5, flex: 1 },
   infoDate: { alignItems: 'flex-end' },
