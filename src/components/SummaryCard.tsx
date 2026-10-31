@@ -19,6 +19,7 @@ export function SummaryCard({
   complete,
   filteredCount,
   extraRows,
+  children,
 }: {
   owned: number;
   total: number;
@@ -26,6 +27,7 @@ export function SummaryCard({
   complete: number;
   filteredCount: number;
   extraRows?: { label: string; value: string; hint?: string }[];
+  children?: React.ReactNode;
 }) {
   const pct = total ? (owned / total) * 100 : 0;
   return (
@@ -54,6 +56,7 @@ export function SummaryCard({
           <Row key={r.label} label={r.label} value={r.value} hint={r.hint} />
         ))}
       </View>
+      {children}
       {filteredCount > 0 ? (
         <Text style={styles.note}>
           {`Considera o último filtro de tipo/raridade de ${filteredCount} ${filteredCount === 1 ? 'coleção' : 'coleções'}.`}

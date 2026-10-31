@@ -18,8 +18,19 @@ import { fetchAllSets, fetchFullSet, fetchSetInfo, SetSummary } from '../api';
 import { applySavedFilters, formatPct, progress, setEntries } from '../collection';
 import { CollectionRow, CollectionTile } from '../components/CollectionCards';
 import { GlassShine } from '../components/Glass';
+import { EvolutionPanel } from '../components/EvolutionPanel';
 import { SummaryCard } from '../components/SummaryCard';
-import { cachedRates, collectionValue, fetchSetPrices, fmtMoney, getRates, loadSetPrices, saveSetPrices } from '../prices';
+import type { Basket } from '../evolution';
+import {
+  cachedRates,
+  collectionValue,
+  fetchSetPrices,
+  fmtMoney,
+  getRates,
+  loadSetPrices,
+  pricesAreStale,
+  saveSetPrices,
+} from '../prices';
 import type { Rates } from '../prices';
 import { eraPt, eraRank, HOME_SORTS, normalizeSort, sortLabel } from '../eras';
 import { SetLogo } from '../components/SetLogo';
@@ -47,15 +58,38 @@ export function HomeScreen({ openSet }: { openSet: (setId: string) => void }) {
   const [sortPicker, setSortPicker] = useState(false);
   const [rates, setRates] = useState<Rates | null>(() => cachedRates());
   const [pricesVersion, setPricesVersion] = useState(0);
+  const [bgPrices, setBgPrices] = useState<string | null>(null);
+
+  // Ao abrir o app: atualiza em segundo plano os preços com mais de 1 dia.
+  // Isso também grava o retrato diário usado no gráfico de evolução.
   useEffect(() => {
     getRates().then((r) => r && setRates(r));
-  }, []);
+    let alive = true;
+    (async () => {
+      const stale = data.collections.map((c) => loadSet(c.setId)).filter((s) => s && pricesAreStale(loadSetPrices(s.id)));
+      for (let i = 0; i < stale.length && alive; i++) {
+        const set = stale[i]!;
+        setBgPrices(`atualizando preços ${i + 1}/${stale.length}…`);
+        try {
+          saveSetPrices(set.id, await fetchSetPrices(set));
+          if (alive) setPricesVersion((v) => v + 1);
+        } catch {
+          break; // sem internet: tenta na próxima vez
+        }
+      }
+      if (alive) setBgPrices(null);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const sort = normalizeSort(data.homeSort);
 
   // progresso de cada coleção: todas as variantes (inclusive correções e as adicionadas à mão),
   // com o último filtro de tipo/raridade aplicado naquela coleção — igual à tela da coleção
-  const stats = useMemo(() => {
+  const { stats, baskets } = useMemo(() => {
     const m: Record<string, { owned: number; total: number; pct: number; filtered: boolean; tcg: number; cm: number }> = {};
+    const baskets: Basket[] = [];
     for (const c of data.collections) {
       const set = loadSet(c.setId);
       if (!set) continue;
@@ -63,8 +97,12 @@ export function HomeScreen({ openSet }: { openSet: (setId: string) => void }) {
       const owned = (k: string) => isOwned(c.setId, k);
       const v = collectionValue(f.list, owned, loadSetPrices(c.setId));
       m[c.setId] = { ...progress(f.list, owned), filtered: f.active, tcg: v.tcg, cm: v.cm };
+      baskets.push({
+        setId: c.setId,
+        items: f.list.filter((e) => owned(e.key)).map((e) => ({ cardId: e.card.id, variantKey: e.variant.key })),
+      });
     }
-    return m;
+    return { stats: m, baskets };
   }, [data.collections, data.custom, data.filters, isOwned, pricesVersion]);
 
   // Coleções agrupadas por era (ordem fixa das eras); dentro de cada era, a ordenação escolhida.
@@ -394,15 +432,18 @@ export function HomeScreen({ openSet }: { openSet: (setId: string) => void }) {
                   {
                     label: 'Valor da coleção (TCGplayer)',
                     value: rates ? fmtMoney(summary.tcg * rates.usd, 'R$') : fmtMoney(summary.tcg, 'US$'),
-                    hint: `${fmtMoney(summary.tcg, 'US$')} · menor preço nos EUA`,
+                    hint: `${fmtMoney(summary.tcg, 'US$')} · preço de mercado nos EUA`,
                   },
                   {
                     label: 'Valor da coleção (Cardmarket)',
                     value: rates ? fmtMoney(summary.cm * rates.eur, 'R$') : fmtMoney(summary.cm, '€'),
-                    hint: `${fmtMoney(summary.cm, '€')} · menor preço na Europa`,
+                    hint: `${fmtMoney(summary.cm, '€')} · preço de mercado na Europa`,
                   },
                 ]}
-              />
+              >
+                <EvolutionPanel baskets={baskets} rates={rates} version={pricesVersion} />
+                {bgPrices ? <Text style={styles.bgPrices}>{bgPrices}</Text> : null}
+              </SummaryCard>
             ) : null
           }
           ListEmptyComponent={
@@ -532,6 +573,7 @@ const styles = StyleSheet.create({
   resultSub: { color: colors.textDim, fontSize: 12, marginTop: 2 },
   addTag: { color: colors.accent, fontWeight: '700', fontSize: 13 },
   addedTag: { color: colors.success },
+  bgPrices: { color: colors.textFaint, fontSize: 11, marginTop: 8 },
   toolbar: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginTop: -4, marginBottom: 10 },
   sortBtn: {
     flex: 1,

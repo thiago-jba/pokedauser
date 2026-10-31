@@ -3,15 +3,17 @@ import type { StoredCard, StoredSet } from './api';
 import { booleansToDetailed, variantKey } from './variants';
 
 export interface VariantPrice {
-  /** TCGplayer, menor preço (US$) */
+  /** TCGplayer, preço de mercado (US$) — média das vendas recentes */
   tcg?: number;
-  /** Cardmarket, menor preço (€) */
+  /** Cardmarket, preço de mercado (€) — tendência de preço */
   cm?: number;
 }
 
 // ---------- leitura dos preços da API ----------
 
 const num = (x: any): number | undefined => (typeof x === 'number' && x > 0 ? x : undefined);
+/** preço de mercado do TCGplayer; se não houver, o preço médio anunciado */
+const tcgMarket = (e: any) => num(e?.marketPrice) ?? num(e?.midPrice);
 
 function pickPrice(pricing: any, type: string, foil: string | undefined, stamps: string[], variantOwnPricing: boolean): VariantPrice {
   const t = pricing?.tcgplayer;
@@ -25,16 +27,20 @@ function pickPrice(pricing: any, type: string, foil: string | undefined, stamps:
 
   let tcg: number | undefined;
   for (const k of keys) {
-    tcg = num(t?.[k]?.lowPrice);
+    tcg = tcgMarket(t?.[k]);
     if (tcg) break;
   }
   // preço específico da variante (ex.: Poké Bola) com uma única entrada: é dela
   if (!tcg && variantOwnPricing && t) {
     const subs = Object.values(t).filter((x: any) => x && typeof x === 'object');
-    if (subs.length === 1) tcg = num((subs[0] as any).lowPrice);
+    if (subs.length === 1) tcg = tcgMarket(subs[0]);
   }
 
-  const cmv = type === 'normal' ? num(cm?.low) : num(cm?.['low-holo']) ?? num(cm?.low);
+  // Cardmarket: tendência de preço; se não houver, média de 30 dias
+  const cmv =
+    type === 'normal'
+      ? num(cm?.trend) ?? num(cm?.avg30) ?? num(cm?.avg)
+      : num(cm?.['trend-holo']) ?? num(cm?.['avg30-holo']) ?? num(cm?.trend) ?? num(cm?.avg30);
   return { tcg, cm: cmv };
 }
 

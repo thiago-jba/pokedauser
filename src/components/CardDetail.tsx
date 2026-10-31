@@ -166,7 +166,7 @@ export function CardDetail({ set, card, onClose }: { set: StoredSet; card: Store
               );
             })}
 
-            <Text style={styles.priceNote}>Menor preço anunciado em cada site. Conversão para reais pela cotação do dia.</Text>
+            <Text style={styles.priceNote}>Preço de mercado: média das vendas recentes (TCGplayer) e tendência de preço (Cardmarket). Em reais pela cotação do dia.</Text>
 
             <Text style={styles.section}>Preço no Brasil</Text>
             <View style={styles.storeRow}>

@@ -210,7 +210,7 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
             {priceProgress ??
               (value.ownedCount === 0
                 ? 'marque cartas para ver o valor'
-                : `${value.priced} de ${value.ownedCount} com preço · menor preço anunciado`)}
+                : `${value.priced} de ${value.ownedCount} com preço · preço de mercado`)}
           </Text>
         </View>
         <View style={{ alignItems: 'flex-end' }}>

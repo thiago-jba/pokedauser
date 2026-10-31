@@ -1,9 +1,11 @@
 // Preços de mercado de cada variante e links de busca nas lojas brasileiras.
-//  - TCGplayer (EUA, US$) e Cardmarket (Europa, €): vêm da TCGdex, sempre o MENOR preço anunciado.
+//  - TCGplayer (EUA, US$) e Cardmarket (Europa, €): vêm da TCGdex, preço de mercado (TCGplayer: média das vendas; Cardmarket: tendência).
 //  - Liga Pokémon e Jornada Games: não têm acesso aberto aos dados, então o app abre a página
 //    da carta no site, onde aparece o preço atual em reais.
 import { Directory, File, Paths } from 'expo-file-system';
 import type { StoredSet } from './api';
+import { addDays, localDate, toDayPrices } from './evolution';
+import type { History } from './evolution';
 import { cardPrices } from './priceUtil';
 import type { VariantPrice } from './priceUtil';
 
@@ -100,14 +102,47 @@ export function saveSetPrices(setId: string, p: SetPrices) {
   if (!d.exists) d.create({ intermediates: true, idempotent: true } as any);
   writeJson(pricesFile(setId), p);
   priceCache.set(setId, p);
+  recordHistory(setId, p);
+}
+
+// ---------- histórico diário (para o gráfico de evolução) ----------
+
+const HISTORY_KEEP_DAYS = 70;
+const histDir = () => new Directory(Paths.document, 'historico');
+const histFile = (id: string) => new File(histDir(), `${id.replace(/[^a-zA-Z0-9._-]/g, '_')}.json`);
+const histCache = new Map<string, History | null>();
+
+export function loadHistory(setId: string): History | null {
+  if (histCache.has(setId)) return histCache.get(setId) ?? null;
+  const h = readJson<History>(histFile(setId));
+  histCache.set(setId, h);
+  return h;
+}
+
+/** Guarda o retrato de preços de hoje (um por dia; se atualizar de novo no mesmo dia, substitui). */
+function recordHistory(setId: string, p: SetPrices) {
+  try {
+    const today = localDate();
+    const h: History = { ...(loadHistory(setId) ?? {}) };
+    h[today] = toDayPrices(p.cards);
+    const oldest = addDays(today, -HISTORY_KEEP_DAYS);
+    for (const day of Object.keys(h)) if (day < oldest) delete h[day];
+    const dir = histDir();
+    if (!dir.exists) dir.create({ intermediates: true, idempotent: true } as any);
+    writeJson(histFile(setId), h);
+    histCache.set(setId, h);
+  } catch {}
 }
 
 export function deleteSetPrices(setId: string) {
   try {
     const f = pricesFile(setId);
     if (f.exists) f.delete();
+    const hf = histFile(setId);
+    if (hf.exists) hf.delete();
   } catch {}
   priceCache.delete(setId);
+  histCache.delete(setId);
 }
 
 export const PRICES_MAX_AGE_H = 24;
@@ -135,7 +170,7 @@ export function cachedRates(): Rates | null {
 }
 
 
-/** Soma o menor preço das variantes que eu tenho (só as da lista recebida, já filtrada). */
+/** Soma o preço de mercado das variantes que eu tenho (só as da lista recebida, já filtrada). */
 export function collectionValue(
   entries: { key: string; card: { id: string }; variant: { key: string } }[],
   isOwned: (key: string) => boolean,
