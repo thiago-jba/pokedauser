@@ -231,6 +231,7 @@ export function buildVariants(
   raw: ApiVariantDetailed[],
   isPromoSet: boolean,
   ignoreStamps: ReadonlySet<string> = new Set(),
+  rarity?: string,
 ): CardVariant[] {
   const seen = new Set<string>();
   const out: CardVariant[] = [];
@@ -240,7 +241,53 @@ export function buildVariants(
     seen.add(c.key);
     out.push(c);
   }
+
+  // Raridade Rara Dupla para cima: essas cartas já saem brilhantes, então a versão base
+  // (que a fonte cadastra como "Holo") conta como Normal. As outras variantes continuam iguais.
+  if (isHighRarity(rarity) && !out.some((c) => c.category === 'normal')) {
+    const base = out.find((c) => c.category === 'holo' && c.finish === 'holo' && !c.custom);
+    if (base) Object.assign(base, { category: 'normal' as const, label: 'Normal', finish: 'normal' as const });
+  }
   return out;
+}
+
+/** Raridades de Rara Dupla para cima (nomes em inglês da fonte de dados). */
+const HIGH_RARITIES_EN = [
+  'Double rare',
+  'Ultra Rare',
+  'Illustration rare',
+  'Special illustration rare',
+  'Hyper rare',
+  'Shiny rare',
+  'Shiny Ultra Rare',
+  'ACE SPEC Rare',
+  'Mega Hyper Rare',
+  'Mega Attack Rare',
+  'Black White Rare',
+  'Pikachu Rare',
+  'RGB Rare',
+  'Futuristic Rare',
+  // eras antigas (equivalentes)
+  'Holo Rare V',
+  'Holo Rare VMAX',
+  'Holo Rare VSTAR',
+  'Shiny rare V',
+  'Shiny rare VMAX',
+  'Radiant Rare',
+  'Amazing Rare',
+  'Secret Rare',
+  'Full Art Trainer',
+  'Rare Holo LV.X',
+  'Rare PRIME',
+  'LEGEND',
+];
+let HIGH_RARITIES: Set<string> | null = null;
+
+/** Aceita o nome em português (como fica salvo) ou em inglês. */
+export function isHighRarity(rarity?: string): boolean {
+  if (!rarity) return false;
+  if (!HIGH_RARITIES) HIGH_RARITIES = new Set(HIGH_RARITIES_EN.flatMap((r) => [r, rarityPt(r)!]).map((r) => r.toLowerCase()));
+  return HIGH_RARITIES.has(rarity.toLowerCase());
 }
 
 const RARITY_PT: Record<string, string> = {

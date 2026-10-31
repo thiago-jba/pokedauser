@@ -84,3 +84,20 @@ assert.equal(allCards(fakeSet).filter((c) => c.localId === 'R').length, 1);
 // ...e continua com a foto enviada enquanto a TCGdex não tiver a imagem
 assert.ok(allCards(fakeSet).find((c) => c.localId === 'R')!.imageFull!.includes('me55%2FR.png'));
 console.log('OK: cartas extras');
+
+// ---- Rara Dupla para cima: versão base conta como Normal; variantes continuam iguais ----
+import { isHighRarity } from '../src/variants.ts';
+assert.ok(isHighRarity('Rara Dupla') && isHighRarity('Ilustração Rara Especial') && isHighRarity('Double rare'));
+assert.ok(!isHighRarity('Rara Holo') && !isHighRarity('Comum') && !isHighRarity(undefined));
+const ign = new Set(['30th-anniversary']);
+// Mew ex (Rara Dupla) só cadastrado como holo -> Normal (mesma chave: as marcações continuam)
+const mewEx = buildVariants([{ type: 'holo', stamp: ['30th-anniversary'] }], false, ign, 'Rara Dupla');
+assert.deepEqual(mewEx.map((v) => [v.category, v.label, v.key]), [['normal', 'Normal', 'holo||||30th-anniversary']]);
+// SIR com variante especial: só a base vira Normal
+const sir = buildVariants([{ type: 'holo' }, { type: 'holo', foil: 'cosmos', promo: true }], false, new Set(), 'Ilustração Rara Especial');
+assert.deepEqual(sir.map((v) => v.category), ['normal', 'promo']);
+// Rara Holo comum continua Holo
+assert.equal(buildVariants([{ type: 'holo' }], false, new Set(), 'Rara Holo')[0].category, 'holo');
+// carta alta que já tem Normal cadastrada: nada muda
+assert.deepEqual(buildVariants([{ type: 'normal' }, { type: 'holo' }], false, new Set(), 'Ultra Rara').map((v) => v.category), ['normal', 'holo']);
+console.log('OK: raridade alta como Normal');

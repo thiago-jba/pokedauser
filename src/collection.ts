@@ -18,7 +18,7 @@ export interface Entry {
 
 export function cardVariants(set: StoredSet, card: StoredCard, custom?: CustomForSet): CardVariant[] {
   const raw = [...card.raw, ...(EXTRA_VARIANTS[card.id] ?? []), ...(custom?.[card.id] ?? []).map((v) => ({ ...v, custom: true }))];
-  return buildVariants(raw, set.isPromoSet, new Set(set.ignoredStamps ?? []));
+  return buildVariants(raw, set.isPromoSet, new Set(set.ignoredStamps ?? []), card.rarity);
 }
 
 /** Cartas da coleção: as da API mais as que o app sabe que faltam (no final da lista). */
