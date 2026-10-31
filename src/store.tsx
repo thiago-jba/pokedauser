@@ -32,6 +32,7 @@ interface Store {
   setHomeSort: (sort: string) => void;
   addPokedexCard: (dexId: number, card: Omit<PokedexCard, 'uid' | 'addedAt'>) => void;
   removePokedexCard: (dexId: number, uid: string) => void;
+  setPokedexFilters: (f: { categories?: string[]; rarities?: string[] }) => void;
   /** país padrão ao marcar uma carta (Configurações) */
   defaultCountry: string;
   setDefaultCountry: (code: string) => void;
@@ -199,6 +200,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const removePokedexCard = useCallback((dexId: number, uid: string) => {
     setData((d) => ({ ...d, pokedex: { ...(d.pokedex ?? {}), [dexId]: (d.pokedex?.[dexId] ?? []).filter((c) => c.uid !== uid) } }));
   }, []);
+  const setPokedexFilters = useCallback(
+    (f: { categories?: string[]; rarities?: string[] }) => setData((d) => ({ ...d, pokedexFilters: { ...d.pokedexFilters, ...f } })),
+    [],
+  );
   const setHomeSort = useCallback((homeSort: string) => setData((d) => ({ ...d, homeSort })), []);
   const defaultCountry = data.settings?.defaultCountry ?? DEFAULT_COUNTRY;
   const setDefaultCountry = useCallback(
@@ -244,6 +249,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setHomeSort,
       addPokedexCard,
       removePokedexCard,
+      setPokedexFilters,
       defaultCountry,
       setDefaultCountry,
       setHomeView,
@@ -251,7 +257,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       patchCollection,
       reload,
     }),
-    [data, isOwned, ownedCountry, setCountry, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, setCategoryFilter, setCardSort, prefsFor, setSetMode, includeVariant, excludeVariant, setHomeSort, addPokedexCard, removePokedexCard, defaultCountry, setDefaultCountry, setHomeView, toggleEra, patchCollection, reload],
+    [data, isOwned, ownedCountry, setCountry, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, setCategoryFilter, setCardSort, prefsFor, setSetMode, includeVariant, excludeVariant, setHomeSort, addPokedexCard, removePokedexCard, setPokedexFilters, defaultCountry, setDefaultCountry, setHomeView, toggleEra, patchCollection, reload],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

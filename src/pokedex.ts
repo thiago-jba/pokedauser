@@ -1,5 +1,9 @@
 // Pokédex: lista de Pokémon (baixada da PokéAPI e guardada no celular) e cartas de cada Pokémon (TCGdex).
 import { File, Paths } from 'expo-file-system';
+import { cardPrices } from './priceUtil';
+import type { VariantPrice } from './priceUtil';
+import { buildVariants, cleanRaw, detectSetWideStamps, rarityPt } from './variants';
+import type { CardVariant } from './variants';
 
 export interface Species {
   id: number;
@@ -184,4 +188,36 @@ export function matchFooter(
     return code && read.codes.includes(code.toUpperCase());
   });
   return withCode.length ? withCode : pool;
+}
+
+// ---------- detalhes de uma carta (versões, raridade, preço) ----------
+
+export interface CardDetailInfo {
+  nameEn?: string;
+  rarity?: string;
+  variants: CardVariant[];
+  prices: Record<string, VariantPrice>;
+}
+
+const detailCache = new Map<string, CardDetailInfo>();
+
+/**
+ * Versões que a carta tem (com a versão base já marcada como Normal), raridade e preços.
+ * Carimbo presente em quase todas as versões da carta (ex.: "30 anos") é a marca da coleção e é ignorado.
+ */
+export async function fetchCardDetail(cardId: string): Promise<CardDetailInfo> {
+  const hit = detailCache.get(cardId);
+  if (hit) return hit;
+  const r = await fetch(`${TCG}/cards/${encodeURIComponent(cardId)}`);
+  const d = r.ok ? await r.json() : null;
+  const raw = cleanRaw(d?.variants_detailed, d?.variants);
+  const ignore = new Set(detectSetWideStamps([{ raw }]));
+  const info: CardDetailInfo = {
+    nameEn: d?.name,
+    rarity: rarityPt(d?.rarity),
+    variants: buildVariants(raw, false, ignore),
+    prices: d ? cardPrices(d) : {},
+  };
+  detailCache.set(cardId, info);
+  return info;
 }

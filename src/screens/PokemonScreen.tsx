@@ -4,6 +4,7 @@ import { Alert, FlatList, Pressable, StyleSheet, Text, useWindowDimensions, View
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AddPokedexCard } from '../components/AddPokedexCard';
 import { GlassShine } from '../components/Glass';
+import { PokedexCardDetail } from '../components/PokedexCardDetail';
 import { IconButton } from '../components/ui';
 import { artworkUrl, dexNumber, loadSpeciesCache } from '../pokedex';
 import type { PokedexCard } from '../storage';
@@ -15,6 +16,7 @@ export function PokemonScreen({ dexId, onBack }: { dexId: number; onBack: () => 
   const { width } = useWindowDimensions();
   const { data, removePokedexCard } = useStore();
   const [adding, setAdding] = useState(false);
+  const [detail, setDetail] = useState<PokedexCard | null>(null);
   const name = loadSpeciesCache()?.find((s) => s.id === dexId)?.name ?? dexNumber(dexId);
   const cards = data.pokedex?.[dexId] ?? [];
   const cols = 2;
@@ -55,11 +57,11 @@ export function PokemonScreen({ dexId, onBack }: { dexId: number; onBack: () => 
               <Text style={styles.addText}>+ Adicionar carta</Text>
               <Text style={styles.addSub}>pela câmera ou digitando a coleção e a carta</Text>
             </Pressable>
-            {cards.length ? <Text style={styles.hint}>Segure o dedo sobre uma carta para remover.</Text> : null}
+            {cards.length ? <Text style={styles.hint}>Toque numa carta para ver preços; segure o dedo para remover.</Text> : null}
           </View>
         }
         renderItem={({ item }) => (
-          <Pressable onLongPress={() => remove(item)} delayLongPress={350} style={{ width: w }}>
+          <Pressable onPress={() => setDetail(item)} onLongPress={() => remove(item)} delayLongPress={350} style={{ width: w }}>
             <View style={[styles.cardFrame, { height: w * CARD_RATIO }]}>
               {item.image ? (
                 <Image source={{ uri: `${item.image}/high.webp` }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
@@ -75,10 +77,21 @@ export function PokemonScreen({ dexId, onBack }: { dexId: number; onBack: () => 
             <Text style={styles.cardNum} numberOfLines={1}>
               {`${item.localId}${item.official ? `/${item.official}` : ''} · ${item.name}`}
             </Text>
+            <Text style={styles.cardType} numberOfLines={1}>
+              {[item.variantLabel ?? 'Normal', item.rarity].filter(Boolean).join(' · ')}
+            </Text>
           </Pressable>
         )}
       />
 
+      <PokedexCardDetail
+        card={detail}
+        onClose={() => setDetail(null)}
+        onRemove={() => {
+          if (detail) removePokedexCard(dexId, detail.uid);
+          setDetail(null);
+        }}
+      />
       <AddPokedexCard visible={adding} dexId={dexId} pokemonName={name} onClose={() => setAdding(false)} />
     </View>
   );
@@ -109,4 +122,5 @@ const styles = StyleSheet.create({
   cardFrame: { borderRadius: 12, overflow: 'hidden', backgroundColor: colors.surface, borderWidth: 2, borderColor: colors.gold },
   cardSet: { color: colors.textDim, fontSize: 11, marginTop: 6 },
   cardNum: { color: colors.text, fontSize: 12, fontWeight: '700' },
+  cardType: { color: colors.textFaint, fontSize: 11 },
 });

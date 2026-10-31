@@ -41,6 +41,8 @@ export interface AppData {
   prefs?: Record<string, { mode?: 'principal' | 'especial'; included?: string[]; excluded?: string[] }>;
   /** Pokédex: número do Pokémon -> cartas que tenho dele */
   pokedex?: Record<string, PokedexCard[]>;
+  /** filtros salvos da tela da Pokédex */
+  pokedexFilters?: { categories?: string[]; rarities?: string[] };
 }
 
 export interface PokedexCard {
@@ -55,6 +57,15 @@ export interface PokedexCard {
   image?: string;
   official?: number;
   addedAt: string;
+  /** versão escolhida (Normal, Reverse, Holo…) */
+  variantKey?: string;
+  variantLabel?: string;
+  /** categoria da versão (normal, reverse, holo, promo…), usada no filtro "Tipo de carta" */
+  category?: string;
+  /** raridade em português */
+  rarity?: string;
+  /** nome em inglês (links das lojas) */
+  nameEn?: string;
 }
 
 export interface AppSettings {
@@ -104,6 +115,7 @@ export function loadData(): AppData {
     settings: d.settings ?? {},
     prefs: d.prefs ?? {},
     pokedex: d.pokedex ?? {},
+    pokedexFilters: d.pokedexFilters ?? {},
   };
 }
 
@@ -231,5 +243,6 @@ export function restoreBackup(b: BackupFile) {
     settings: b.data.settings ?? {},
     prefs: b.data.prefs ?? {},
     pokedex: b.data.pokedex ?? {},
+    pokedexFilters: b.data.pokedexFilters ?? {},
   });
 }

@@ -2,12 +2,13 @@ import { Image } from 'expo-image';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { fetchAllSets, SetSummary } from '../api';
-import { fetchPokemonCards, fetchSetCards, matchFooter, parseFooter, PokemonCardBrief } from '../pokedex';
+import { CardDetailInfo, fetchCardDetail, fetchPokemonCards, fetchSetCards, matchFooter, parseFooter, PokemonCardBrief } from '../pokedex';
 import { loadSetsCacheAnyAge, saveSetsCache } from '../storage';
 import { useStore } from '../store';
 import { CARD_RATIO, colors } from '../theme';
 import { matchesQuery } from '../variants';
 import { CardScanner } from './CardScanner';
+import { Chip } from './ui';
 
 interface Suggestion {
   key: string;
@@ -80,6 +81,26 @@ export function AddPokedexCard({ visible, dexId, pokemonName, onClose }: { visib
   const [scanning, setScanning] = useState(false);
   const [scanMsg, setScanMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [detail, setDetail] = useState<CardDetailInfo | null>(null);
+  const [variantKey, setVariantKey] = useState<string | null>(null);
+
+  // versões da carta escolhida (Normal, Reverse…): começa na versão base
+  useEffect(() => {
+    setDetail(null);
+    setVariantKey(null);
+    if (!card) return;
+    let alive = true;
+    fetchCardDetail(card.id)
+      .then((d) => {
+        if (!alive) return;
+        setDetail(d);
+        setVariantKey((d.variants.find((v) => v.category === 'normal') ?? d.variants[0])?.key ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [card?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // dados: lista de coleções e todas as cartas deste Pokémon
   useEffect(() => {
@@ -183,7 +204,13 @@ export function AddPokedexCard({ visible, dexId, pokemonName, onClose }: { visib
   };
   const save = () => {
     if (!card) return;
+    const v = detail?.variants.find((x) => x.key === variantKey);
     addPokedexCard(dexId, {
+      variantKey: v?.key,
+      variantLabel: v?.label,
+      category: v?.category,
+      rarity: detail?.rarity,
+      nameEn: detail?.nameEn,
       cardId: card.id,
       setId: card.setId,
       setName: setName(card.setId),
@@ -238,6 +265,22 @@ export function AddPokedexCard({ visible, dexId, pokemonName, onClose }: { visib
               disabled={!setId}
             />
 
+            {card ? (
+              <View style={{ marginTop: 12 }}>
+                <Text style={styles.label}>Tipo de carta</Text>
+                {!detail ? (
+                  <ActivityIndicator color={colors.accent} style={{ alignSelf: 'flex-start' }} />
+                ) : (
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 8 }}>
+                    {detail.variants.map((v) => (
+                      <Chip key={v.key} label={v.label} active={variantKey === v.key} onPress={() => setVariantKey(v.key)} />
+                    ))}
+                  </View>
+                )}
+                {detail?.rarity ? <Text style={styles.rarity}>{`Raridade: ${detail.rarity}`}</Text> : null}
+              </View>
+            ) : null}
+
             {card?.image ? (
               <Image source={{ uri: `${card.image}/high.webp` }} style={styles.preview} contentFit="contain" cachePolicy="disk" />
             ) : null}
@@ -282,6 +325,7 @@ const styles = StyleSheet.create({
   suggest: { paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   suggestTitle: { color: colors.text, fontWeight: '600' },
   suggestSub: { color: colors.textFaint, fontSize: 11, marginTop: 1 },
+  rarity: { color: colors.textDim, fontSize: 12, marginTop: 8 },
   preview: { width: 180, height: 180 * CARD_RATIO, alignSelf: 'center', marginTop: 16, borderRadius: 10 },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 18 },
   btn: { paddingHorizontal: 18, paddingVertical: 11, borderRadius: 999, backgroundColor: colors.surface },

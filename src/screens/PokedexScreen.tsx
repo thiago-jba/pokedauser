@@ -3,20 +3,23 @@ import React, { memo, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassShine } from '../components/Glass';
+import { MultiPicker } from '../components/MultiPicker';
 import { TAB_BAR_SPACE } from '../components/TabBar';
 import { ProgressBar, Segmented } from '../components/ui';
 import { artworkUrl, dexNumber, getSpecies, loadSpeciesCache, Species } from '../pokedex';
 import type { PokedexCard } from '../storage';
 import { useStore } from '../store';
 import { CARD_RATIO, colors } from '../theme';
-import { matchesQuery } from '../variants';
+import { CATEGORY_LABELS, CATEGORY_ORDER, matchesQuery } from '../variants';
+import type { VariantCategory } from '../variants';
 
 type Status = 'todos' | 'tenho' | 'faltam';
 
 export function PokedexScreen({ openPokemon }: { openPokemon: (id: number) => void }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { data } = useStore();
+  const { data, setPokedexFilters } = useStore();
+  const [picker, setPicker] = useState<'tipo' | 'raridade' | null>(null);
   const [species, setSpecies] = useState<Species[] | null>(() => loadSpeciesCache());
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState('');
@@ -30,7 +33,36 @@ export function PokedexScreen({ openPokemon }: { openPokemon: (id: number) => vo
   };
   useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const dex = data.pokedex ?? {};
+  const allDex = data.pokedex ?? {};
+
+  // filtros (escolha múltipla): só oferecem o que existe nas minhas cartas da Pokédex
+  const myCards = useMemo(() => Object.values(allDex).flat(), [allDex]);
+  const catOf = (c: PokedexCard) => c.category ?? 'normal';
+  const rarOf = (c: PokedexCard) => c.rarity ?? 'Sem raridade';
+  const typeOptions = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const c of myCards) m.set(catOf(c), (m.get(catOf(c)) ?? 0) + 1);
+    return CATEGORY_ORDER.filter((c) => m.has(c)).map((c) => ({ value: c, label: CATEGORY_LABELS[c as VariantCategory], count: m.get(c) }));
+  }, [myCards]);
+  const rarityOptions = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const c of myCards) m.set(rarOf(c), (m.get(rarOf(c)) ?? 0) + 1);
+    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([r, n]) => ({ value: r, label: r, count: n }));
+  }, [myCards]);
+  const selTypes = (data.pokedexFilters?.categories ?? []).filter((t) => typeOptions.some((o) => o.value === t));
+  const selRars = (data.pokedexFilters?.rarities ?? []).filter((r) => rarityOptions.some((o) => o.value === r));
+  const filtering = selTypes.length > 0 || selRars.length > 0;
+
+  // cartas de cada Pokémon que passam pelos filtros
+  const dex = useMemo(() => {
+    if (!filtering) return allDex;
+    const out: Record<string, PokedexCard[]> = {};
+    for (const [id, cards] of Object.entries(allDex)) {
+      const ok = cards.filter((c) => (!selTypes.length || selTypes.includes(catOf(c))) && (!selRars.length || selRars.includes(rarOf(c))));
+      if (ok.length) out[id] = ok;
+    }
+    return out;
+  }, [allDex, filtering, selTypes.join(), selRars.join()]); // eslint-disable-line react-hooks/exhaustive-deps
   const ownedCount = useMemo(() => (species ?? []).filter((s) => (dex[s.id]?.length ?? 0) > 0).length, [species, dex]);
 
   const list = useMemo(() => {
@@ -72,7 +104,7 @@ export function PokedexScreen({ openPokemon }: { openPokemon: (id: number) => vo
                 <Text style={styles.big}>{`${ownedCount} de ${total || '…'}`}</Text>
                 <Text style={styles.pct}>{total ? `${Math.floor((ownedCount / total) * 1000) / 10}`.replace('.', ',') + '%' : ''}</Text>
               </View>
-              <Text style={styles.sub}>Pokémon com pelo menos uma carta</Text>
+              <Text style={styles.sub}>{filtering ? 'Pokémon com carta nos filtros escolhidos' : 'Pokémon com pelo menos uma carta'}</Text>
               <View style={{ marginTop: 8 }}>
                 <ProgressBar value={ownedCount} total={total} height={8} />
               </View>
@@ -94,6 +126,18 @@ export function PokedexScreen({ openPokemon }: { openPokemon: (id: number) => vo
                 </Pressable>
               ) : null}
             </View>
+            <View style={styles.filterRow}>
+              <Pressable style={[styles.filterPill, selTypes.length > 0 && styles.filterOn]} onPress={() => setPicker('tipo')}>
+                <Text style={styles.filterText} numberOfLines={1}>
+                  {selTypes.length === 0 ? 'Tipo de carta ▾' : selTypes.length === 1 ? CATEGORY_LABELS[selTypes[0] as VariantCategory] : `${selTypes.length} tipos`}
+                </Text>
+              </Pressable>
+              <Pressable style={[styles.filterPill, selRars.length > 0 && styles.filterOn]} onPress={() => setPicker('raridade')}>
+                <Text style={styles.filterText} numberOfLines={1}>
+                  {selRars.length === 0 ? 'Raridade ▾' : selRars.length === 1 ? selRars[0] : `${selRars.length} raridades`}
+                </Text>
+              </Pressable>
+            </View>
             <Segmented<Status>
               value={status}
               onChange={setStatus}
@@ -114,6 +158,24 @@ export function PokedexScreen({ openPokemon }: { openPokemon: (id: number) => vo
         renderItem={({ item }) => (
           <PokedexTile species={item} cards={dex[item.id] ?? []} width={tileW} onPress={() => openPokemon(item.id)} />
         )}
+      />
+      <MultiPicker
+        visible={picker === 'tipo'}
+        title="Tipo de carta"
+        hint="Só aparecem os tipos que você tem na Pokédex. Fica salvo."
+        options={typeOptions}
+        selected={selTypes}
+        onChange={(v) => setPokedexFilters({ categories: v })}
+        onClose={() => setPicker(null)}
+      />
+      <MultiPicker
+        visible={picker === 'raridade'}
+        title="Raridade"
+        hint="Só aparecem as raridades que você tem na Pokédex. Fica salvo."
+        options={rarityOptions}
+        selected={selRars}
+        onChange={(v) => setPokedexFilters({ rarities: v })}
+        onClose={() => setPicker(null)}
       />
     </View>
   );
@@ -226,6 +288,18 @@ const styles = StyleSheet.create({
   searchIcon: { color: colors.textDim, fontSize: 20, marginRight: 6 },
   searchInput: { flex: 1, color: colors.text, fontSize: 15, paddingVertical: 11 },
   empty: { color: colors.textDim, textAlign: 'center', marginTop: 30, paddingHorizontal: 24 },
+  filterRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+  filterPill: {
+    flex: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  filterOn: { borderColor: colors.accent, borderWidth: 1 },
+  filterText: { color: colors.text, fontSize: 13, fontWeight: '700' },
   frame: {
     borderRadius: 10,
     overflow: 'hidden',

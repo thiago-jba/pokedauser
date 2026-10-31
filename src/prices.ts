@@ -190,3 +190,39 @@ export function collectionValue(
   }
   return { tcg, cm, ownedCount, priced };
 }
+
+// ---------- preços da Pokédex (cartas de várias coleções) ----------
+
+/** Identificador usado para guardar os preços e o histórico da Pokédex. */
+export const POKEDEX_PRICES_ID = '__pokedex';
+
+/** Preços de uma lista de cartas avulsas (as cartas da Pokédex). */
+export async function fetchCardListPrices(cardIds: string[], onProgress?: (done: number, total: number) => void): Promise<SetPrices> {
+  const ids = [...new Set(cardIds)];
+  const result: SetPrices = { fetchedAt: new Date().toISOString(), names: {}, cards: {} };
+  let next = 0;
+  let done = 0;
+  const worker = async () => {
+    while (next < ids.length) {
+      const id = ids[next++];
+      const d = await getJson(`${BASE}/cards/${encodeURIComponent(id)}`);
+      if (d) {
+        if (d.name) result.names[id] = d.name;
+        const p = cardPrices(d);
+        if (Object.keys(p).length) result.cards[id] = p;
+      }
+      done++;
+      onProgress?.(done, ids.length);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(8, ids.length) }, worker));
+  return result;
+}
+
+/** Preço de uma carta da Pokédex na versão escolhida (sem versão salva, usa a versão base). */
+export function pokedexCardPrice(prices: SetPrices | null, cardId: string, variantKey?: string): VariantPrice | undefined {
+  const forCard = prices?.cards[cardId];
+  if (!forCard) return undefined;
+  if (variantKey && forCard[variantKey]) return forCard[variantKey];
+  return variantKey ? undefined : forCard['normal'] ?? forCard['holo'] ?? Object.values(forCard)[0];
+}

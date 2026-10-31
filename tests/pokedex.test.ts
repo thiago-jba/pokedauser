@@ -31,3 +31,13 @@ assert.deepEqual(matchFooter(r1, cards, si).map((c) => c.id), ['30th-116']);
 assert.deepEqual(matchFooter(r2, cards, si).map((c) => c.id), ['sv07-003']); // total 142 desempata
 assert.deepEqual(matchFooter({ number: 3, codes: ['PRE'] }, cards, si).map((c) => c.id), ['sv08.5-003']); // código desempata
 console.log('OK: pokédex (nomes e leitura do rodapé)');
+
+// versões de uma carta isolada: carimbo em todas as versões é ignorado (30 Anos)
+import { buildVariants, cleanRaw, detectSetWideStamps } from '../src/variants.ts';
+const raw30 = cleanRaw([{ type: 'normal', stamp: ['30th-anniversary'] }], undefined);
+const v30 = buildVariants(raw30, false, new Set(detectSetWideStamps([{ raw: raw30 }])));
+assert.deepEqual(v30.map((v) => [v.category, v.label]), [['normal', 'Normal']]);
+const rawPre = cleanRaw([{ type: 'normal' }, { type: 'reverse' }, { type: 'reverse', foil: 'pokeball' }, { type: 'reverse', foil: 'masterball' }], undefined);
+const vPre = buildVariants(rawPre, false, new Set(detectSetWideStamps([{ raw: rawPre }])));
+assert.deepEqual(vPre.map((v) => v.label), ['Normal', 'Reverse', 'Reverse Poké Bola', 'Reverse Master Bola']);
+console.log('OK: versões da carta na Pokédex');

@@ -20,6 +20,8 @@ import { CollectionRow, CollectionTile } from '../components/CollectionCards';
 import { GlassShine } from '../components/Glass';
 import { EvolutionPanel } from '../components/EvolutionPanel';
 import { SummaryCard } from '../components/SummaryCard';
+import { PokedexSummary } from '../components/PokedexSummary';
+import { loadSpeciesCache } from '../pokedex';
 import { TAB_BAR_SPACE } from '../components/TabBar';
 import type { Basket } from '../evolution';
 import {
@@ -31,6 +33,9 @@ import {
   loadSetPrices,
   pricesAreStale,
   saveSetPrices,
+  fetchCardListPrices,
+  POKEDEX_PRICES_ID,
+  pokedexCardPrice,
 } from '../prices';
 import type { Rates } from '../prices';
 import { eraPt, eraRank, HOME_SORTS, normalizeSort, sortLabel } from '../eras';
@@ -77,6 +82,17 @@ export function HomeScreen({ openSet, openSettings }: { openSet: (setId: string)
         } catch {
           break; // sem internet: tenta na próxima vez
         }
+      }
+      // Pokédex: atualiza se passou 1 dia ou se há carta nova sem preço
+      const dexCards = Object.values(data.pokedex ?? {}).flat();
+      const dexPrices = loadSetPrices(POKEDEX_PRICES_ID);
+      const missing = dexCards.some((c) => !dexPrices?.cards[c.cardId] && !dexPrices?.names[c.cardId]);
+      if (alive && dexCards.length && (pricesAreStale(dexPrices) || missing)) {
+        setBgPrices('atualizando preços da Pokédex…');
+        try {
+          saveSetPrices(POKEDEX_PRICES_ID, await fetchCardListPrices(dexCards.map((c) => c.cardId)));
+          if (alive) setPricesVersion((v) => v + 1);
+        } catch {}
       }
       if (alive) setBgPrices(null);
     })();
@@ -140,6 +156,28 @@ export function HomeScreen({ openSet, openSettings }: { openSet: (setId: string)
         return { era, list: sorted, owned, total };
       });
   }, [data.collections, sort, stats]);
+
+  // Pokédex: progresso conta cada Pokémon uma vez; valor e evolução somam todas as cartas
+  const dexSummary = useMemo(() => {
+    const all = data.pokedex ?? {};
+    const cards = Object.values(all).flat();
+    const prices = loadSetPrices(POKEDEX_PRICES_ID);
+    let tcg = 0;
+    let cm = 0;
+    for (const c of cards) {
+      const p = pokedexCardPrice(prices, c.cardId, c.variantKey);
+      tcg += p?.tcg ?? 0;
+      cm += p?.cm ?? 0;
+    }
+    return {
+      ownedSpecies: Object.values(all).filter((l) => l.length > 0).length,
+      totalSpecies: loadSpeciesCache()?.length ?? 1025,
+      cardsCount: cards.length,
+      tcg,
+      cm,
+      baskets: [{ setId: POKEDEX_PRICES_ID, items: cards.map((c) => ({ cardId: c.cardId, variantKey: c.variantKey ?? 'normal' })) }] as Basket[],
+    };
+  }, [data.pokedex, pricesVersion]);
 
   // Resumo geral: soma de todas as coleções, cada uma com o seu último filtro
   const summary = useMemo(() => {
@@ -422,7 +460,8 @@ export function HomeScreen({ openSet, openSettings }: { openSet: (setId: string)
           keyExtractor={(r) => (r.kind === 'era' ? `era-${r.era}` : r.kind === 'tiles' ? r.key : r.item.setId)}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + TAB_BAR_SPACE, gap: view === 'lista' ? 8 : 12 }}
           ListHeaderComponent={
-            data.collections.length > 0 ? (
+            <View>
+            {data.collections.length > 0 ? (
               <SummaryCard
                 owned={summary.owned}
                 total={summary.total}
@@ -445,7 +484,20 @@ export function HomeScreen({ openSet, openSettings }: { openSet: (setId: string)
                 <EvolutionPanel baskets={baskets} rates={rates} version={pricesVersion} />
                 {bgPrices ? <Text style={styles.bgPrices}>{bgPrices}</Text> : null}
               </SummaryCard>
-            ) : null
+            ) : null}
+            {dexSummary.cardsCount > 0 ? (
+              <PokedexSummary
+                ownedSpecies={dexSummary.ownedSpecies}
+                totalSpecies={dexSummary.totalSpecies}
+                cardsCount={dexSummary.cardsCount}
+                tcg={dexSummary.tcg}
+                cm={dexSummary.cm}
+                rates={rates}
+                baskets={dexSummary.baskets}
+                version={pricesVersion}
+              />
+            ) : null}
+            </View>
           }
           ListEmptyComponent={
             <View style={styles.emptyBox}>
