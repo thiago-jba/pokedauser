@@ -37,6 +37,8 @@ export interface AppData {
   collapsedEras?: string[];
   /** configurações do app */
   settings?: AppSettings;
+  /** setId -> modo da coleção e variações incluídas/ocultadas pelo usuário */
+  prefs?: Record<string, { mode?: 'principal' | 'especial'; included?: string[]; excluded?: string[] }>;
 }
 
 export interface AppSettings {
@@ -84,6 +86,7 @@ export function loadData(): AppData {
     homeView: d.homeView,
     collapsedEras: d.collapsedEras ?? [],
     settings: d.settings ?? {},
+    prefs: d.prefs ?? {},
   };
 }
 
@@ -209,5 +212,6 @@ export function restoreBackup(b: BackupFile) {
     homeView: b.data.homeView,
     collapsedEras: b.data.collapsedEras ?? [],
     settings: b.data.settings ?? {},
+    prefs: b.data.prefs ?? {},
   });
 }

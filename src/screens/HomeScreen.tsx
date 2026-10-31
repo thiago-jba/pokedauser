@@ -54,7 +54,7 @@ import { matchesQuery } from '../variants';
 export function HomeScreen({ openSet, openSettings }: { openSet: (setId: string) => void; openSettings: () => void }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { data, isOwned, upsertCollection, removeCollection, reload, setHomeSort, setHomeView, toggleEra, patchCollection } = useStore();
+  const { data, isOwned, upsertCollection, removeCollection, reload, setHomeSort, setHomeView, toggleEra, patchCollection, prefsFor } = useStore();
   const [sortPicker, setSortPicker] = useState(false);
   const [rates, setRates] = useState<Rates | null>(() => cachedRates());
   const [pricesVersion, setPricesVersion] = useState(0);
@@ -93,7 +93,7 @@ export function HomeScreen({ openSet, openSettings }: { openSet: (setId: string)
     for (const c of data.collections) {
       const set = loadSet(c.setId);
       if (!set) continue;
-      const f = applySavedFilters(setEntries(set, data.custom[c.setId]), data.filters[c.setId]);
+      const f = applySavedFilters(setEntries(set, prefsFor(c.setId)), data.filters[c.setId]);
       const owned = (k: string) => isOwned(c.setId, k);
       const v = collectionValue(f.list, owned, loadSetPrices(c.setId));
       m[c.setId] = { ...progress(f.list, owned), filtered: f.active, tcg: v.tcg, cm: v.cm };
@@ -103,7 +103,7 @@ export function HomeScreen({ openSet, openSettings }: { openSet: (setId: string)
       });
     }
     return { stats: m, baskets };
-  }, [data.collections, data.custom, data.filters, isOwned, pricesVersion]);
+  }, [data.collections, data.filters, isOwned, pricesVersion, prefsFor]);
 
   // Coleções agrupadas por era (ordem fixa das eras); dentro de cada era, a ordenação escolhida.
   const groups = useMemo(() => {

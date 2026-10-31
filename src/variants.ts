@@ -103,6 +103,22 @@ const STAMP_PT: Record<string, string> = {
   'ace-trainer': 'Ace Trainer',
   pokeball: 'Carimbo Poké Bola',
   '30th-anniversary': '30 Anos',
+  gamestop: 'GameStop',
+  'eb-games': 'EB Games',
+  'worlds-2025': 'Mundial 2025',
+  'worlds-2024': 'Mundial 2024',
+  'worlds-2023': 'Mundial 2023',
+  'pokemon-day': 'Pokémon Day',
+  'regional-championships': 'Regional',
+  'international-championships': 'Internacional',
+  'national-championships': 'Nacional',
+  'city-championships': 'Cidade',
+  'state-championships': 'Estadual',
+  champion: 'Campeão',
+  finalist: 'Finalista',
+  'top-eight': 'Top 8',
+  winner: 'Vencedor',
+  'prerelease': 'Pré-lançamento',
 };
 
 const TYPE_PT: Record<string, string> = {

@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { StoredSet } from './api';
-import { ownedKey, setEntries } from './collection';
+import { allPossibleKeys, ownedKey } from './collection';
+import type { SetMode, SetPrefs } from './collection';
 import { deleteSetPrices } from './prices';
 import { AppData, CollectionEntry, deleteSet, loadData, saveData, saveSet } from './storage';
 import { DEFAULT_COUNTRY } from './countries';
@@ -23,6 +24,11 @@ interface Store {
   setRarityFilter: (setId: string, rarities: string[]) => void;
   setCategoryFilter: (setId: string, categories: string[]) => void;
   setCardSort: (setId: string, sort: string) => void;
+  /** preferências da coleção (modo, variações incluídas/ocultadas, adicionadas à mão) */
+  prefsFor: (setId: string) => SetPrefs;
+  setSetMode: (setId: string, mode: SetMode) => void;
+  includeVariant: (setId: string, key: string) => void;
+  excludeVariant: (setId: string, key: string) => void;
   setHomeSort: (sort: string) => void;
   /** país padrão ao marcar uma carta (Configurações) */
   defaultCountry: string;
@@ -103,7 +109,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         totalCards: set.cards.length,
       };
       // remove marcações de variantes que deixaram de existir
-      const valid = new Set(setEntries(set, d.custom[set.id]).map((e) => e.key));
+      const valid = allPossibleKeys(set, d.custom[set.id]);
       const owned = Object.fromEntries(Object.entries(d.owned[set.id] ?? {}).filter(([k]) => valid.has(k)));
       const others = d.collections.filter((c) => c.setId !== set.id);
       return { ...d, collections: [entry, ...others], owned: { ...d.owned, [set.id]: owned } };
@@ -152,6 +158,35 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setData((d) => ({ ...d, filters: { ...d.filters, [setId]: { ...d.filters[setId], categories } } }));
   }, []);
 
+  const prefsMap = data.prefs;
+  const customMap = data.custom;
+  const prefsFor = useCallback(
+    (setId: string): SetPrefs => ({ custom: customMap[setId], ...(prefsMap?.[setId] ?? {}) }),
+    [prefsMap, customMap],
+  );
+  const updPrefs = (setId: string, f: (p: NonNullable<AppData['prefs']>[string]) => NonNullable<AppData['prefs']>[string]) =>
+    setData((d) => ({ ...d, prefs: { ...(d.prefs ?? {}), [setId]: f({ ...(d.prefs?.[setId] ?? {}) }) } }));
+  const setSetMode = useCallback((setId: string, mode: SetMode) => updPrefs(setId, (p) => ({ ...p, mode })), []); // eslint-disable-line react-hooks/exhaustive-deps
+  // incluir: tira das ocultadas; se não estava oculta, entra como extra incluída
+  const includeVariant = useCallback(
+    (setId: string, key: string) =>
+      updPrefs(setId, (p) =>
+        (p.excluded ?? []).includes(key)
+          ? { ...p, excluded: p.excluded!.filter((k) => k !== key) }
+          : { ...p, included: [...new Set([...(p.included ?? []), key])] },
+      ),
+    [], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  // ocultar: tira das incluídas; se fazia parte da coleção pela regra, vai para as ocultadas
+  const excludeVariant = useCallback(
+    (setId: string, key: string) =>
+      updPrefs(setId, (p) =>
+        (p.included ?? []).includes(key)
+          ? { ...p, included: p.included!.filter((k) => k !== key) }
+          : { ...p, excluded: [...new Set([...(p.excluded ?? []), key])] },
+      ),
+    [], // eslint-disable-line react-hooks/exhaustive-deps
+  );
   const setCardSort = useCallback((setId: string, sort: string) => {
     setData((d) => ({ ...d, filters: { ...d.filters, [setId]: { ...d.filters[setId], sort } } }));
   }, []);
@@ -193,6 +228,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setRarityFilter,
       setCategoryFilter,
       setCardSort,
+      prefsFor,
+      setSetMode,
+      includeVariant,
+      excludeVariant,
       setHomeSort,
       defaultCountry,
       setDefaultCountry,
@@ -201,7 +240,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       patchCollection,
       reload,
     }),
-    [data, isOwned, ownedCountry, setCountry, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, setCategoryFilter, setCardSort, setHomeSort, defaultCountry, setDefaultCountry, setHomeView, toggleEra, patchCollection, reload],
+    [data, isOwned, ownedCountry, setCountry, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, setCategoryFilter, setCardSort, prefsFor, setSetMode, includeVariant, excludeVariant, setHomeSort, defaultCountry, setDefaultCountry, setHomeView, toggleEra, patchCollection, reload],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

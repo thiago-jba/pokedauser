@@ -2,7 +2,8 @@ import { Image } from 'expo-image';
 import React, { useEffect, useState } from 'react';
 import { Alert, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { cardImage, StoredCard, StoredSet } from '../api';
-import { cardVariants, ownedKey } from '../collection';
+import { cardVariants, otherVariants, ownedKey } from '../collection';
+import type { SetPrefs } from '../collection';
 import { countryName, flagEmoji } from '../countries';
 import { CountryPicker } from './CountryPicker';
 import {
@@ -27,9 +28,9 @@ const TYPES: { value: string; label: string }[] = [
 ];
 const FOILS = ['cosmos', 'pokeball', 'masterball', 'galaxy', 'cracked-ice', 'gold', 'rainbow', 'energy', 'team-rocket'];
 
-export function CardDetail({ set, card, onClose }: { set: StoredSet; card: StoredCard | null; onClose: () => void }) {
+export function CardDetail({ set, prefs, card, onClose }: { set: StoredSet; prefs: SetPrefs; card: StoredCard | null; onClose: () => void }) {
   const { width, height } = useWindowDimensions();
-  const { ownedCountry, toggleOwned, setCountry, data, addCustomVariant, removeCustomVariant } = useStore();
+  const { ownedCountry, toggleOwned, setCountry, data, addCustomVariant, removeCustomVariant, includeVariant, excludeVariant } = useStore();
   const [pickingFor, setPickingFor] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [type, setType] = useState('holo');
@@ -62,7 +63,8 @@ export function CardDetail({ set, card, onClose }: { set: StoredSet; card: Store
   if (!card) return null;
   const setId = set.id;
   const imgW = Math.min(width - 48, (height * 0.5) / CARD_RATIO);
-  const variants = cardVariants(set, card, data.custom[setId]);
+  const variants = cardVariants(set, card, prefs);
+  const others = otherVariants(set, card, prefs);
   const cached = loadSetPrices(setId);
   const prices = livePrices ?? cached?.cards[card.id] ?? {};
   const code = data.collections.find((c) => c.setId === setId)?.code ?? set.code;
@@ -126,7 +128,23 @@ export function CardDetail({ set, card, onClose }: { set: StoredSet; card: Store
                       >
                         <Text style={styles.remove}>Remover</Text>
                       </Pressable>
-                    ) : null}
+                    ) : (
+                      <Pressable
+                        hitSlop={8}
+                        onPress={() =>
+                          Alert.alert(
+                            'Ocultar da coleção',
+                            `"${v.label}" deixa de aparecer e de contar nesta coleção. Dá para incluir de novo em "Outras versões desta carta".`,
+                            [
+                              { text: 'Cancelar', style: 'cancel' },
+                              { text: 'Ocultar', style: 'destructive', onPress: () => excludeVariant(setId, k) },
+                            ],
+                          )
+                        }
+                      >
+                        <Text style={styles.hide}>Ocultar da coleção</Text>
+                      </Pressable>
+                    )}
                     {(() => {
                       const vp = prices[v.key];
                       if (!vp) return <Text style={styles.priceNone}>{loadingPrices ? 'buscando preço…' : 'sem preço no TCGplayer/Cardmarket'}</Text>;
@@ -165,6 +183,29 @@ export function CardDetail({ set, card, onClose }: { set: StoredSet; card: Store
                 </Pressable>
               );
             })}
+
+            {others.length ? (
+              <>
+                <Text style={styles.section}>Outras versões desta carta</Text>
+                <Text style={styles.othersHint}>Existem, mas não fazem parte da sua coleção. Toque para incluir.</Text>
+                {others.map((v) => {
+                  const k = ownedKey(card.id, v.key);
+                  const fc = finishColors[v.finish];
+                  return (
+                    <Pressable key={v.key} style={styles.row} onPress={() => includeVariant(setId, k)}>
+                      <View style={[styles.dot, { backgroundColor: fc.bg, opacity: 0.6 }]} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.rowTitle, { color: colors.textDim }]}>{v.label}</Text>
+                        <Text style={styles.rowSub}>{CATEGORY_LABELS[v.category]}</Text>
+                      </View>
+                      <View style={styles.includeBtn}>
+                        <Text style={styles.includeText}>+ Incluir</Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </>
+            ) : null}
 
             <Text style={styles.priceNote}>Preço de mercado: média das vendas recentes (TCGplayer) e tendência de preço (Cardmarket). Em reais pela cotação do dia.</Text>
 
@@ -273,6 +314,10 @@ const styles = StyleSheet.create({
   countryFlag: { fontSize: 16 },
   countryName: { color: colors.text, fontSize: 13, fontWeight: '600', flexShrink: 1 },
   countryChange: { color: colors.accent, fontSize: 12, fontWeight: '700' },
+  hide: { color: colors.textFaint, fontSize: 12, fontWeight: '700', marginTop: 4 },
+  othersHint: { color: colors.textFaint, fontSize: 11, alignSelf: 'flex-start', marginBottom: 4 },
+  includeBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: colors.accentDim },
+  includeText: { color: colors.accent, fontWeight: '800', fontSize: 12 },
   remove: { color: colors.accent, fontSize: 12, fontWeight: '700', marginTop: 2 },
   toggle: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, borderWidth: 1, borderColor: colors.border },
   toggleOn: { backgroundColor: colors.gold, borderColor: colors.gold },

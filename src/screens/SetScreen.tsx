@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchFullSet, StoredCard, StoredSet } from '../api';
-import { allCards, applySavedFilters, Entry, formatPct, ownedKey, progress, setEntries } from '../collection';
+import { allCards, applySavedFilters, Entry, formatPct, modeOf, ownedKey, progress, setEntries } from '../collection';
 import { SetCodeBadge } from '../components/CollectionCards';
 import { GlassShine } from '../components/Glass';
 import { SetLogo } from '../components/SetLogo';
@@ -49,7 +49,8 @@ const CATEGORY_COLOR: Partial<Record<VariantCategory, string>> = {
 export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { isOwned, ownedCountry, toggleOwned, setOwned, upsertCollection, setRarityFilter, setCategoryFilter, setCardSort, patchCollection, data } = useStore();
+  const { isOwned, ownedCountry, toggleOwned, setOwned, upsertCollection, setRarityFilter, setCategoryFilter, setCardSort, patchCollection, prefsFor, setSetMode, data } = useStore();
+  const [modePicker, setModePicker] = useState(false);
   const entry = data.collections.find((c) => c.setId === setId);
   const [editingDate, setEditingDate] = useState<string | null>(null);
   const [setPrices, setSetPrices] = useState<SetPrices | null>(() => loadSetPrices(setId));
@@ -63,8 +64,8 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
   const [detail, setDetail] = useState<StoredCard | null>(null);
   const [busy, setBusy] = useState<{ title: string; done?: number; total?: number } | null>(null);
 
-  const custom = data.custom[setId];
-  const allEntries: Entry[] = useMemo(() => (set ? setEntries(set, custom) : []), [set, custom]);
+  const prefs = useMemo(() => prefsFor(setId), [prefsFor, setId]);
+  const allEntries: Entry[] = useMemo(() => (set ? setEntries(set, prefs) : []), [set, prefs]);
 
   // filtro de raridade (várias escolhas), lembrado por coleção
   const selectedRarities = useMemo(() => data.filters[setId]?.rarities ?? [], [data.filters, setId]);
@@ -259,9 +260,14 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
 
       <View style={styles.infoRow}>
         <SetCodeBadge code={entry?.code ?? set.code} />
-        <Text style={styles.infoEra} numberOfLines={1}>
-          {eraPt(entry?.serieName ?? set.serieName)}
-        </Text>
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text style={styles.infoEra} numberOfLines={1}>
+            {eraPt(entry?.serieName ?? set.serieName)}
+          </Text>
+          <Pressable onPress={() => setModePicker(true)} hitSlop={6} style={styles.modePill}>
+            <Text style={styles.modePillText}>{modeOf(set, prefs) === 'principal' ? 'Coleção principal ▾' : 'Coleção especial ▾'}</Text>
+          </Pressable>
+        </View>
         <Pressable
           style={styles.infoDate}
           hitSlop={6}
@@ -405,6 +411,38 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
         </Pressable>
       </Modal>
 
+      <Modal visible={modePicker} transparent animationType="fade" onRequestClose={() => setModePicker(false)}>
+        <Pressable style={styles.pickerBackdrop} onPress={() => setModePicker(false)}>
+          <Pressable style={[styles.picker, { paddingHorizontal: 18 }]} onPress={() => {}}>
+            <Text style={[styles.pickerTitle, { paddingHorizontal: 0 }]}>Tipo de coleção</Text>
+            {(
+              [
+                ['principal', 'Coleção principal', 'Por carta: 1 Normal; + 1 Reverse nas Comuns, Incomuns e Raras numeradas. Raras Duplas, ACE SPEC e cartas acima do total oficial: só 1. Outras variações você inclui na tela da carta (segure o dedo).'],
+                ['especial', 'Coleção especial', 'Todas as variações que existem (Poké Bola, Master Bola, Cosmos, carimbos…). As que não interessam você oculta na tela da carta.'],
+              ] as const
+            ).map(([value, title, desc]) => {
+              const on = modeOf(set, prefs) === value;
+              return (
+                <Pressable
+                  key={value}
+                  style={[styles.modeOption, on && { borderColor: colors.accent }]}
+                  onPress={() => {
+                    setSetMode(setId, value);
+                    setModePicker(false);
+                  }}
+                >
+                  <Text style={[styles.modeTitle, on && { color: colors.accent }]}>{`${on ? '✓ ' : ''}${title}`}</Text>
+                  <Text style={styles.modeDesc}>{desc}</Text>
+                </Pressable>
+              );
+            })}
+            <Text style={[styles.pickerHint, { paddingHorizontal: 0, marginTop: 8 }]}>
+              Trocar o tipo não apaga nenhuma marcação: as cartas que você já tem voltam a contar quando aparecem de novo.
+            </Text>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <Modal visible={sortPicker} transparent animationType="fade" onRequestClose={() => setSortPicker(false)}>
         <Pressable style={styles.pickerBackdrop} onPress={() => setSortPicker(false)}>
           <Pressable style={styles.picker} onPress={() => {}}>
@@ -470,7 +508,7 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
         </Pressable>
       </Modal>
 
-      <CardDetail set={set} card={detail} onClose={() => setDetail(null)} />
+      <CardDetail set={set} prefs={prefs} card={detail} onClose={() => setDetail(null)} />
       <BusyModal visible={!!busy} title={busy?.title ?? ''} done={busy?.done} total={busy?.total} />
     </View>
   );
@@ -517,7 +555,20 @@ const styles = StyleSheet.create({
   valueLine: { color: colors.text, fontWeight: '800', fontSize: 13 },
   valueSrc: { color: colors.textFaint, fontWeight: '600', fontSize: 11 },
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginTop: -4, marginBottom: 12 },
-  infoEra: { color: colors.gold, fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5, flex: 1 },
+  infoEra: { color: colors.gold, fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
+  modePill: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  modePillText: { color: colors.text, fontSize: 12, fontWeight: '700' },
+  modeOption: { borderWidth: 1, borderColor: colors.border, borderRadius: 16, padding: 12, marginTop: 10, backgroundColor: colors.surface },
+  modeTitle: { color: colors.text, fontWeight: '800', fontSize: 15 },
+  modeDesc: { color: colors.textDim, fontSize: 12, marginTop: 4, lineHeight: 17 },
   infoDate: { alignItems: 'flex-end' },
   infoDateLabel: { color: colors.textFaint, fontSize: 10 },
   infoDateValue: { color: colors.text, fontSize: 13, fontWeight: '700' },
