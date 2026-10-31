@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchFullSet, StoredCard, StoredSet } from '../api';
-import { Entry, formatPct, ownedKey, progress, setEntries } from '../collection';
+import { allCards, Entry, formatPct, ownedKey, progress, setEntries } from '../collection';
 import { SetLogo } from '../components/SetLogo';
 import { CardDetail } from '../components/CardDetail';
 import { CardTile } from '../components/CardTile';
@@ -64,7 +64,7 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
     return m;
   }, [allEntries]);
 
-  const rarities = useMemo(() => [...new Set((set?.cards ?? []).map((c) => c.rarity ?? 'Sem raridade'))], [set]);
+  const rarities = useMemo(() => [...new Set((set ? allCards(set) : []).map((c) => c.rarity ?? 'Sem raridade'))], [set]);
   // ignora tipos salvos que não existem nesta coleção
   const catSet = useMemo(() => new Set(selectedCategories.filter((c) => catCounts.has(c))), [selectedCategories, catCounts]);
   // ignora raridades salvas que não existem mais nesta coleção

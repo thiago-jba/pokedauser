@@ -1,8 +1,9 @@
 // Junta as variantes da API, as correções do app e as adicionadas à mão,
 // e calcula os números de progresso.
 import type { StoredCard, StoredSet } from './api';
-import { EXTRA_VARIANTS } from './corrections';
-import { ApiVariantDetailed, buildVariants, CardVariant } from './variants';
+import { EXTRA_CARDS, EXTRA_VARIANTS } from './corrections';
+import { buildVariants } from './variants';
+import type { ApiVariantDetailed, CardVariant } from './variants';
 
 export const ownedKey = (cardId: string, variantKey: string) => `${cardId}#${variantKey}`;
 
@@ -20,8 +21,16 @@ export function cardVariants(set: StoredSet, card: StoredCard, custom?: CustomFo
   return buildVariants(raw, set.isPromoSet, new Set(set.ignoredStamps ?? []));
 }
 
+/** Cartas da coleção: as da API mais as que o app sabe que faltam (no final da lista). */
+export function allCards(set: StoredSet): StoredCard[] {
+  const extras = EXTRA_CARDS[set.id];
+  if (!extras) return set.cards;
+  const have = new Set(set.cards.map((c) => c.id));
+  return [...set.cards, ...extras.filter((c) => !have.has(c.id))];
+}
+
 export function setEntries(set: StoredSet, custom?: CustomForSet): Entry[] {
-  return set.cards.flatMap((card) =>
+  return allCards(set).flatMap((card) =>
     cardVariants(set, card, custom).map((variant) => ({ key: ownedKey(card.id, variant.key), card, variant })),
   );
 }

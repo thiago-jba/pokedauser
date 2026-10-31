@@ -66,3 +66,19 @@ assert.ok(matchesQuery('Celebração de 30 Anos', 'celebracao 30'));
 assert.ok(!matchesQuery('Evoluções Prismáticas', 'faiscas'));
 assert.equal(rarityPt('Special illustration rare'), 'Ilustração Rara Especial');
 console.log('OK: todos os testes passaram');
+
+// ---- Mew RGB entram no final da Celebração de 30 Anos ----
+import { allCards, setEntries } from '../src/collection.ts';
+const fakeSet: any = {
+  schema: 2, id: '30th', isPromoSet: false, ignoredStamps: ['30th-anniversary'], nameEn: '30th Celebration',
+  cards: [
+    { id: '30th-116', localId: '116', name: 'Eevee', raw: [{ type: 'normal', stamp: ['30th-anniversary'] }] },
+    { id: '30th-158', localId: '158', name: 'Mew ex', raw: [{ type: 'holo', stamp: ['30th-anniversary'] }] },
+  ],
+};
+assert.deepEqual(allCards(fakeSet).map((c) => c.localId), ['116', '158', 'R', 'G', 'B']);
+assert.equal(setEntries(fakeSet).length, 2 + 1 + 3, 'Eevee x2 + Mew ex + 3 Mew RGB');
+// se a API passar a ter o Mew R, não duplica
+fakeSet.cards.push({ id: '30th-R', localId: 'R', name: 'Mew', raw: [{ type: 'holo' }] });
+assert.equal(allCards(fakeSet).filter((c) => c.localId === 'R').length, 1);
+console.log('OK: cartas extras');

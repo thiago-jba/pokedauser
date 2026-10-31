@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import React, { memo } from 'react';
+import React, { memo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { imageUrl, StoredCard } from '../api';
 import { CARD_RATIO, colors, finishColors } from '../theme';
@@ -17,7 +17,8 @@ interface Props {
 function CardTileBase({ card, variant, owned, width, onToggle, onOpen }: Props) {
   const fc = finishColors[variant.finish];
   const h = width * CARD_RATIO;
-  const uri = imageUrl(card.image, 'low');
+  const [failed, setFailed] = useState(false);
+  const uri = failed ? undefined : imageUrl(card.image, 'low');
 
   return (
     <Pressable
@@ -36,12 +37,17 @@ function CardTileBase({ card, variant, owned, width, onToggle, onOpen }: Props) 
             cachePolicy="disk"
             transition={150}
             recyclingKey={card.id}
+            onError={() => setFailed(true)}
           />
         ) : (
-          <View style={[StyleSheet.absoluteFill, styles.noImg]}>
-            <Text style={styles.noImgText} numberOfLines={3}>
+          <View style={[StyleSheet.absoluteFill, styles.noImg, !owned && { opacity: 0.5 }]}>
+            <Text style={styles.noImgNum} numberOfLines={1}>
+              {card.localId}
+            </Text>
+            <Text style={styles.noImgText} numberOfLines={2}>
               {card.name}
             </Text>
+            <Text style={styles.noImgHint}>foto ainda não disponível</Text>
           </View>
         )}
         {variant.finish !== 'normal' && (
@@ -76,7 +82,9 @@ const styles = StyleSheet.create({
   },
   sheen: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 3, opacity: 0.9 },
   noImg: { alignItems: 'center', justifyContent: 'center', padding: 6 },
-  noImgText: { color: colors.textDim, fontSize: 11, textAlign: 'center' },
+  noImgNum: { color: colors.text, fontSize: 26, fontWeight: '900' },
+  noImgText: { color: colors.text, fontSize: 12, fontWeight: '700', textAlign: 'center', marginTop: 2 },
+  noImgHint: { color: colors.textFaint, fontSize: 9, textAlign: 'center', marginTop: 6 },
   check: {
     position: 'absolute',
     top: 4,

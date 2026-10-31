@@ -7,7 +7,7 @@
     "start": "expo start",
     "android": "expo run:android",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types tests/variants.test.ts"
+    "test": "node --experimental-strip-types --import ./tests/register.mjs tests/variants.test.ts"
   },
   "dependencies": {
     "expo": "~57.0.0"
