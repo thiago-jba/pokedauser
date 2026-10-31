@@ -2,7 +2,9 @@
   "expo": {
     "name": "Coleção TCG",
     "slug": "pokecolecao",
+    "owner": "dauser-jba",
     "version": "1.0.0",
+    "runtimeVersion": "1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -11,6 +13,14 @@
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#11121C"
+    },
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0,
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
     },
     "android": {
       "package": "br.pessoal.colecaotcg",

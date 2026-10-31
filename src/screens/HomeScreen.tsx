@@ -17,6 +17,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { assetUrl, fetchAllSets, fetchFullSet, SetSummary } from '../api';
 import { BusyModal, IconButton, ProgressBar } from '../components/ui';
+import { versionLabel } from '../components/UpdateBanner';
 import {
   buildBackup,
   CollectionEntry,
@@ -261,6 +262,7 @@ export function HomeScreen({ openSet }: { openSet: (setId: string) => void }) {
             </Pressable>
             <View style={styles.menuItem}>
               <Text style={styles.menuSub}>Dica: segure o dedo sobre uma coleção para removê-la. Dados das cartas: TCGdex.</Text>
+              <Text style={[styles.menuSub, { marginTop: 8 }]}>{`App ${versionLabel()}`}</Text>
             </View>
           </View>
         </Pressable>

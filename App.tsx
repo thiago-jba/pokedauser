@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { BackHandler, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
+import { UpdateBanner } from './src/components/UpdateBanner';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { SetScreen } from './src/screens/SetScreen';
 import { StoreProvider } from './src/store';
@@ -37,6 +38,7 @@ export default function App() {
               <SetScreen key={route.setId} setId={route.setId} onBack={() => setRoute({ name: 'home' })} />
             )}
           </ErrorBoundary>
+          <UpdateBanner />
         </View>
       </StoreProvider>
     </SafeAreaProvider>

@@ -21,7 +21,8 @@
     "expo-file-system",
     "expo-sharing",
     "expo-document-picker",
-    "react-native-safe-area-context"
+    "react-native-safe-area-context",
+    "expo-updates"
   ],
   "appDevDependencies": [
     "typescript",

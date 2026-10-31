@@ -1,4 +1,9 @@
-name: Gerar APK Android
+name: Publicar app
+
+# A cada envio para a main:
+#  - publica uma atualização automática (o app baixa sozinho ao abrir);
+#  - gera um APK novo SÓ quando muda algo "estrutural" (dependências, ícone, configuração),
+#    ou quando a mensagem do commit tem [apk], ou ao rodar manualmente.
 
 on:
   push:
@@ -9,21 +14,42 @@ permissions:
   contents: write
 
 concurrency:
-  group: apk
-  cancel-in-progress: true
+  group: publicar
+  cancel-in-progress: false
 
 jobs:
-  build:
+  publicar:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Precisa de APK novo?
+        id: decide
+        run: |
+          APK=false
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then APK=true; fi
+          if git rev-parse HEAD~1 >/dev/null 2>&1; then
+            CHANGED=$(git diff --name-only HEAD~1 HEAD)
+          else
+            CHANGED="(primeiro commit)"; APK=true
+          fi
+          echo "Arquivos alterados:"; echo "$CHANGED"
+          if echo "$CHANGED" | grep -qE '^(package\.json|app\.json|eas\.json|assets/|keystore/|\.github/)'; then APK=true; fi
+          if git log -1 --pretty=%B | grep -qi '\[apk\]'; then APK=true; fi
+          echo "apk=$APK" >> "$GITHUB_OUTPUT"
+          echo "Gerar APK: $APK"
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
+        if: steps.decide.outputs.apk == 'true'
         with:
           distribution: zulu
           java-version: 17
@@ -35,48 +61,73 @@ jobs:
           DEV=$(node -p "require('./package.json').appDevDependencies.join(' ')")
           npx expo install $DEPS
           npx expo install $DEV -- --save-dev
-          echo "---- versões resolvidas ----"
-          node -p "JSON.stringify({...require('./package.json').dependencies, ...require('./package.json').devDependencies}, null, 2)"
 
       - name: Testes da classificação de variantes
         run: npm test
 
       - name: Verificação de tipos
-        continue-on-error: true
         run: npx tsc --noEmit
 
-      - name: Número da versão
+      - name: Ligar ao projeto no Expo
+        if: env.EXPO_TOKEN != ''
+        run: |
+          npx --yes eas-cli@latest init --non-interactive --force
+          node -e "
+            const fs=require('fs');const j=JSON.parse(fs.readFileSync('app.json'));
+            const id=j.expo.extra&&j.expo.extra.eas&&j.expo.extra.eas.projectId;
+            if(!id){console.error('projectId não encontrado');process.exit(1);}
+            j.expo.updates.url='https://u.expo.dev/'+id;
+            fs.writeFileSync('app.json', JSON.stringify(j,null,2));
+            console.log('Projeto Expo:', id);"
+
+      - name: Sem token do Expo — desliga atualização automática
+        if: env.EXPO_TOKEN == ''
         run: |
           node -e "
-            const fs=require('fs');const p='app.json';const j=JSON.parse(fs.readFileSync(p));
+            const fs=require('fs');const j=JSON.parse(fs.readFileSync('app.json'));
+            j.expo.updates.enabled=false;fs.writeFileSync('app.json', JSON.stringify(j,null,2));"
+
+      - name: Publicar atualização automática
+        if: env.EXPO_TOKEN != ''
+        run: |
+          MSG=$(git log -1 --pretty=%s | cut -c1-200)
+          npx --yes eas-cli@latest update --channel production --platform android --environment production --message "$MSG" --non-interactive
+
+      # ---------- APK (só quando necessário) ----------
+
+      - name: Número da versão
+        if: steps.decide.outputs.apk == 'true'
+        run: |
+          node -e "
+            const fs=require('fs');const j=JSON.parse(fs.readFileSync('app.json'));
             j.expo.android.versionCode=${{ github.run_number }};
             j.expo.version='1.0.${{ github.run_number }}';
-            fs.writeFileSync(p, JSON.stringify(j,null,2));"
+            fs.writeFileSync('app.json', JSON.stringify(j,null,2));"
 
       - name: Gerar projeto Android
+        if: steps.decide.outputs.apk == 'true'
         run: npx expo prebuild --platform android --no-install
         env:
           CI: 1
 
       - name: Assinatura fixa (permite atualizar o app sem perder dados)
+        if: steps.decide.outputs.apk == 'true'
         run: cp keystore/app.keystore android/app/debug.keystore
 
       - name: Compilar APK
+        if: steps.decide.outputs.apk == 'true'
         working-directory: android
         run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=armeabi-v7a,arm64-v8a
 
       - name: Renomear APK
+        if: steps.decide.outputs.apk == 'true'
         run: cp android/app/build/outputs/apk/release/app-release.apk ColecaoTCG-1.0.${{ github.run_number }}.apk
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: apk
-          path: ColecaoTCG-*.apk
-
-      - name: Publicar versão para download
+      - name: Publicar APK para download
+        if: steps.decide.outputs.apk == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
           name: Coleção TCG 1.0.${{ github.run_number }}
-          body: Baixe o arquivo .apk abaixo no celular e toque nele para instalar ou atualizar.
+          body: Baixe o arquivo .apk abaixo no celular e toque nele para instalar ou atualizar. A coleção continua salva.
           files: ColecaoTCG-*.apk
