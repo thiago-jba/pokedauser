@@ -3,23 +3,35 @@ import React, { useMemo, useState } from 'react';
 import { StyleProp, Text, View, ViewStyle } from 'react-native';
 import { colors } from '../theme';
 
+// Logos oficiais em português do site tcg.pokemon.com/pt-br.
+// O nome do arquivo segue o código da coleção ("sv08", "me01"; "sv08.5" vira "sv08pt5").
+const OFFICIAL_BASE = 'https://d1i787aglh9bmb.cloudfront.net/assets/img/global/logos/pt-br/';
+const OFFICIAL_ALIAS: Record<string, string> = { '30th': 'thirty' };
+
+export function officialLogoUrl(setId: string): string {
+  const code = OFFICIAL_ALIAS[setId] ?? setId.replace(/\.5$/, 'pt5');
+  return `${OFFICIAL_BASE}${code}.png`;
+}
+
 /**
- * Logo da coleção. Tenta, em ordem: logo em português, logo em inglês, símbolo da coleção.
+ * Logo da coleção. Tenta, em ordem: logo oficial em português (site da Pokémon),
+ * logo da TCGdex em português, em inglês, e o símbolo da coleção.
  * Se nenhum existir, mostra a sigla da coleção.
  */
 export function SetLogo({
+  setId,
   logo,
   symbol,
-  fallbackText,
   style,
 }: {
+  setId: string;
   logo?: string;
   symbol?: string;
-  fallbackText: string;
   style: StyleProp<ViewStyle>;
 }) {
+  const fallbackText = setId;
   const candidates = useMemo(() => {
-    const list: string[] = [];
+    const list: string[] = [officialLogoUrl(setId)];
     if (logo) {
       list.push(`${logo}.webp`, `${logo}.png`);
       const en = logo.replace(/assets\.tcgdex\.net\/[a-z-]+\//, 'assets.tcgdex.net/en/');
@@ -27,7 +39,7 @@ export function SetLogo({
     }
     if (symbol) list.push(`${symbol}.webp`, `${symbol}.png`);
     return list;
-  }, [logo, symbol]);
+  }, [setId, logo, symbol]);
   const [idx, setIdx] = useState(0);
 
   if (idx >= candidates.length) {

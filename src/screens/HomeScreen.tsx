@@ -197,7 +197,7 @@ export function HomeScreen({ openSet }: { openSet: (setId: string) => void }) {
           }
           renderItem={({ item }) => (
             <Pressable style={({ pressed }) => [styles.result, pressed && { backgroundColor: colors.surface2 }]} onPress={() => addSet(item)}>
-              <SetLogo logo={item.logo} symbol={item.symbol} fallbackText={item.id} style={styles.resultLogo} />
+              <SetLogo setId={item.id} logo={item.logo} symbol={item.symbol} style={styles.resultLogo} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.resultName} numberOfLines={2}>
                   {item.namePt ?? item.nameEn}
@@ -232,7 +232,7 @@ export function HomeScreen({ openSet }: { openSet: (setId: string) => void }) {
                 onPress={() => openSet(item.setId)}
                 onLongPress={() => confirmRemove(item)}
               >
-                <SetLogo logo={item.logo} symbol={item.symbol} fallbackText={item.setId} style={styles.tileLogo} />
+                <SetLogo setId={item.setId} logo={item.logo} symbol={item.symbol} style={styles.tileLogo} />
                 <View style={styles.tileNameRow}>
                   <SetSymbol symbol={item.symbol} />
                   <Text style={styles.tileName} numberOfLines={2}>

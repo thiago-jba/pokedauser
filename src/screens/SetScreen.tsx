@@ -34,9 +34,8 @@ const CATEGORY_COLOR: Partial<Record<VariantCategory, string>> = {
 export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { isOwned, toggleOwned, setOwned, upsertCollection, setRarityFilter, data } = useStore();
+  const { isOwned, toggleOwned, setOwned, upsertCollection, setRarityFilter, setCategoryFilter, data } = useStore();
   const [set, setSet] = useState<StoredSet | null>(() => loadSet(setId));
-  const [category, setCategory] = useState<VariantCategory | 'todas'>('todas');
   const [status, setStatus] = useState<Status>('todas');
   const [rarityPicker, setRarityPicker] = useState(false);
   const [text, setText] = useState('');
@@ -51,6 +50,14 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
   const toggleRarity = (r: string) =>
     setRarityFilter(setId, raritySet.has(r) ? selectedRarities.filter((x) => x !== r) : [...selectedRarities, r]);
 
+  // filtro de tipo de carta (várias escolhas), lembrado por coleção
+  const selectedCategories = useMemo(
+    () => (data.filters[setId]?.categories ?? []) as VariantCategory[],
+    [data.filters, setId],
+  );
+  const toggleCategory = (c: VariantCategory) =>
+    setCategoryFilter(setId, catSet.has(c) ? selectedCategories.filter((x) => x !== c) : [...selectedCategories, c]);
+
   const catCounts = useMemo(() => {
     const m = new Map<VariantCategory, number>();
     for (const e of allEntries) m.set(e.variant.category, (m.get(e.variant.category) ?? 0) + 1);
@@ -58,6 +65,8 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
   }, [allEntries]);
 
   const rarities = useMemo(() => [...new Set((set?.cards ?? []).map((c) => c.rarity ?? 'Sem raridade'))], [set]);
+  // ignora tipos salvos que não existem nesta coleção
+  const catSet = useMemo(() => new Set(selectedCategories.filter((c) => catCounts.has(c))), [selectedCategories, catCounts]);
   // ignora raridades salvas que não existem mais nesta coleção
   const raritySet = useMemo(() => new Set(selectedRarities.filter((r) => rarities.includes(r))), [selectedRarities, rarities]);
 
@@ -66,7 +75,7 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
   const base = useMemo(
     () =>
       allEntries.filter((e) => {
-        if (category !== 'todas' && e.variant.category !== category) return false;
+        if (catSet.size && !catSet.has(e.variant.category)) return false;
         if (raritySet.size && !raritySet.has(e.card.rarity ?? 'Sem raridade')) return false;
         if (text.trim()) {
           const t = text.trim().replace(/^#/, '');
@@ -76,7 +85,7 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
         }
         return true;
       }),
-    [allEntries, category, raritySet, text],
+    [allEntries, catSet, raritySet, text],
   );
 
   const filtered = useMemo(
@@ -91,7 +100,7 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
   );
 
   const stats = useMemo(() => progress(base, (k) => isOwned(setId, k)), [base, isOwned, setId]);
-  const hasFilter = category !== 'todas' || raritySet.size > 0 || !!text.trim();
+  const hasFilter = catSet.size > 0 || raritySet.size > 0 || !!text.trim();
 
   const onToggle = useCallback((card: StoredCard, v: CardVariant) => toggleOwned(setId, ownedKey(card.id, v.key)), [toggleOwned, setId]);
   const onOpen = useCallback((card: StoredCard) => setDetail(card), []);
@@ -143,7 +152,7 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
   const header = (
     <View>
       <View style={styles.summary}>
-        <SetLogo logo={set.logo} symbol={set.symbol} fallbackText={set.id} style={styles.logo} />
+        <SetLogo setId={set.id} logo={set.logo} symbol={set.symbol} style={styles.logo} />
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
             <Text style={styles.summaryBig}>{`${stats.owned} de ${stats.total}`}</Text>
@@ -174,17 +183,18 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
         ) : null}
       </View>
 
-      <Text style={styles.label}>Tipo de carta</Text>
+      <Text style={styles.label}>Tipo de carta · pode escolher vários</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16 }} style={{ marginBottom: 10 }}>
-        <Chip label="Todas" count={allEntries.length} active={category === 'todas'} onPress={() => setCategory('todas')} />
+        <Chip label="Todas" count={allEntries.length} active={catSet.size === 0} onPress={() => setCategoryFilter(setId, [])} />
         {CATEGORY_ORDER.filter((c) => catCounts.has(c)).map((c) => (
           <Chip
             key={c}
             label={CATEGORY_LABELS[c]}
             count={catCounts.get(c)}
-            active={category === c}
+            active={catSet.has(c)}
+            check
             color={CATEGORY_COLOR[c]}
-            onPress={() => setCategory(c)}
+            onPress={() => toggleCategory(c)}
           />
         ))}
       </ScrollView>

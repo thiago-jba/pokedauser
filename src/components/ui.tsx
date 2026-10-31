@@ -24,12 +24,15 @@ export function Chip({
   active,
   onPress,
   color,
+  check,
 }: {
   label: string;
   count?: number;
   active: boolean;
   onPress: () => void;
   color?: string;
+  /** mostra ✓ quando ativo (para filtros de múltipla escolha) */
+  check?: boolean;
 }) {
   return (
     <Pressable
@@ -40,6 +43,7 @@ export function Chip({
       ]}
     >
       <Text style={[styles.chipText, active && { color: '#fff' }]}>
+        {check && active ? '✓ ' : ''}
         {label}
         {count !== undefined ? <Text style={styles.chipCount}>{`  ${count}`}</Text> : null}
       </Text>

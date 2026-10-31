@@ -24,7 +24,7 @@ export interface AppData {
   /** setId -> cardId -> variantes adicionadas à mão */
   custom: Record<string, Record<string, ApiVariantDetailed[]>>;
   /** setId -> último filtro de raridade usado */
-  filters: Record<string, { rarities?: string[] }>;
+  filters: Record<string, { rarities?: string[]; categories?: string[] }>;
 }
 
 export const emptyData = (): AppData => ({ version: 1, collections: [], owned: {}, custom: {}, filters: {} });

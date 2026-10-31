@@ -16,6 +16,7 @@ interface Store {
   addCustomVariant: (setId: string, cardId: string, v: ApiVariantDetailed) => void;
   removeCustomVariant: (setId: string, cardId: string, key: string) => void;
   setRarityFilter: (setId: string, rarities: string[]) => void;
+  setCategoryFilter: (setId: string, categories: string[]) => void;
   reload: () => void;
 }
 
@@ -123,6 +124,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setData((d) => ({ ...d, filters: { ...d.filters, [setId]: { ...d.filters[setId], rarities } } }));
   }, []);
 
+  const setCategoryFilter = useCallback((setId: string, categories: string[]) => {
+    setData((d) => ({ ...d, filters: { ...d.filters, [setId]: { ...d.filters[setId], categories } } }));
+  }, []);
+
   const reload = useCallback(() => setData(loadData()), []);
 
   const value = useMemo(
@@ -136,9 +141,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       addCustomVariant,
       removeCustomVariant,
       setRarityFilter,
+      setCategoryFilter,
       reload,
     }),
-    [data, isOwned, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, reload],
+    [data, isOwned, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, setCategoryFilter, reload],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
