@@ -17,6 +17,7 @@ import { allCards, applySavedFilters, Entry, formatPct, ownedKey, progress, setE
 import { SetCodeBadge } from '../components/CollectionCards';
 import { GlassShine } from '../components/Glass';
 import { SetLogo } from '../components/SetLogo';
+import { CARD_SORTS, cardSortLabel, normalizeCardSort, sortEntries } from '../cardSort';
 import { eraPt, formatDateBr, parseDateBr } from '../eras';
 import {
   cachedRates,
@@ -48,7 +49,7 @@ const CATEGORY_COLOR: Partial<Record<VariantCategory, string>> = {
 export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { isOwned, ownedCountry, toggleOwned, setOwned, upsertCollection, setRarityFilter, setCategoryFilter, patchCollection, data } = useStore();
+  const { isOwned, ownedCountry, toggleOwned, setOwned, upsertCollection, setRarityFilter, setCategoryFilter, setCardSort, patchCollection, data } = useStore();
   const entry = data.collections.find((c) => c.setId === setId);
   const [editingDate, setEditingDate] = useState<string | null>(null);
   const [setPrices, setSetPrices] = useState<SetPrices | null>(() => loadSetPrices(setId));
@@ -57,6 +58,7 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
   const [set, setSet] = useState<StoredSet | null>(() => loadSet(setId));
   const [status, setStatus] = useState<Status>('todas');
   const [rarityPicker, setRarityPicker] = useState(false);
+  const [sortPicker, setSortPicker] = useState(false);
   const [text, setText] = useState('');
   const [detail, setDetail] = useState<StoredCard | null>(null);
   const [busy, setBusy] = useState<{ title: string; done?: number; total?: number } | null>(null);
@@ -117,6 +119,15 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
   );
 
   const stats = useMemo(() => progress(base, (k) => isOwned(setId, k)), [base, isOwned, setId]);
+
+  // ordenação das cartas (lembrada por coleção); por valor só quando a coleção tem preços
+  const hasPrices = !!setPrices && Object.keys(setPrices.cards).length > 0;
+  const savedSort = normalizeCardSort(data.filters[setId]?.sort);
+  const cardSort = CARD_SORTS.find((o) => o.value === savedSort)?.needsPrice && !hasPrices ? 'num_asc' : savedSort;
+  const shown = useMemo(
+    () => sortEntries(filtered, cardSort, (e) => setPrices?.cards[e.card.id]?.[e.variant.key]),
+    [filtered, cardSort, setPrices],
+  );
   const value = useMemo(() => collectionValue(base, (k) => isOwned(setId, k), setPrices), [base, isOwned, setId, setPrices]);
 
   // preços: atualiza em segundo plano uma vez por dia
@@ -294,11 +305,16 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
       </View>
 
       <View style={styles.countRow}>
-        <Text style={styles.countText}>{`${filtered.length} na tela · toque para marcar, segure para ver detalhes`}</Text>
+        <Pressable style={styles.sortPill} onPress={() => setSortPicker(true)} hitSlop={6}>
+          <Text style={styles.sortPillText} numberOfLines={1}>
+            ⇅ {cardSortLabel(cardSort)}
+          </Text>
+        </Pressable>
         <Pressable onPress={bulk} hitSlop={8}>
           <Text style={styles.bulk}>Lote</Text>
         </Pressable>
       </View>
+      <Text style={styles.countText}>{`${filtered.length} na tela · toque para marcar, segure para ver detalhes`}</Text>
     </View>
   );
 
@@ -320,7 +336,7 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
       </View>
 
       <FlatList
-        data={filtered}
+        data={shown}
         key={cols}
         numColumns={cols}
         keyExtractor={(e) => e.key}
@@ -364,6 +380,32 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
                 <Text style={{ color: '#fff', fontWeight: '700' }}>Pronto</Text>
               </Pressable>
             </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={sortPicker} transparent animationType="fade" onRequestClose={() => setSortPicker(false)}>
+        <Pressable style={styles.pickerBackdrop} onPress={() => setSortPicker(false)}>
+          <Pressable style={styles.picker} onPress={() => {}}>
+            <Text style={styles.pickerTitle}>Ordenar cartas</Text>
+            <Text style={styles.pickerHint}>
+              {hasPrices ? 'Fica salvo para esta coleção.' : 'As opções por valor aparecem quando esta coleção tiver preços.'}
+            </Text>
+            <ScrollView>
+              {CARD_SORTS.filter((o) => !o.needsPrice || hasPrices).map((o) => (
+                <Pressable
+                  key={o.value}
+                  style={styles.pickerItem}
+                  onPress={() => {
+                    setCardSort(setId, o.value);
+                    setSortPicker(false);
+                  }}
+                >
+                  <Text style={[styles.pickerText, o.value === cardSort && { color: colors.text, fontWeight: '800' }]}>{o.label}</Text>
+                  {o.value === cardSort ? <Text style={{ color: colors.accent, fontWeight: '900' }}>✓</Text> : null}
+                </Pressable>
+              ))}
+            </ScrollView>
           </Pressable>
         </Pressable>
       </Modal>
@@ -487,7 +529,18 @@ const styles = StyleSheet.create({
   rarityBtn: { maxWidth: 140, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, backgroundColor: colors.surface },
   rarityText: { color: colors.text, fontSize: 13, fontWeight: '600' },
   countRow: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginTop: 12, marginBottom: 6 },
-  countText: { color: colors.textFaint, fontSize: 12, flex: 1 },
+  sortPill: {
+    flex: 1,
+    marginRight: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  sortPillText: { color: colors.text, fontSize: 13, fontWeight: '700' },
+  countText: { color: colors.textFaint, fontSize: 12, marginHorizontal: 16, marginBottom: 6 },
   bulk: { color: colors.accent, fontWeight: '700', fontSize: 13 },
   empty: { color: colors.textDim, textAlign: 'center', marginTop: 40 },
   retry: { backgroundColor: colors.accent, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10 },

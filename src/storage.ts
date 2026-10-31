@@ -28,7 +28,7 @@ export interface AppData {
   /** setId -> cardId -> variantes adicionadas à mão */
   custom: Record<string, Record<string, ApiVariantDetailed[]>>;
   /** setId -> último filtro de raridade usado */
-  filters: Record<string, { rarities?: string[]; categories?: string[] }>;
+  filters: Record<string, { rarities?: string[]; categories?: string[]; sort?: string }>;
   /** ordenação escolhida na tela inicial */
   homeSort?: string;
   /** visualização da tela inicial: quadros ou lista */

@@ -22,6 +22,7 @@ interface Store {
   removeCustomVariant: (setId: string, cardId: string, key: string) => void;
   setRarityFilter: (setId: string, rarities: string[]) => void;
   setCategoryFilter: (setId: string, categories: string[]) => void;
+  setCardSort: (setId: string, sort: string) => void;
   setHomeSort: (sort: string) => void;
   /** país padrão ao marcar uma carta (Configurações) */
   defaultCountry: string;
@@ -151,6 +152,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setData((d) => ({ ...d, filters: { ...d.filters, [setId]: { ...d.filters[setId], categories } } }));
   }, []);
 
+  const setCardSort = useCallback((setId: string, sort: string) => {
+    setData((d) => ({ ...d, filters: { ...d.filters, [setId]: { ...d.filters[setId], sort } } }));
+  }, []);
   const setHomeSort = useCallback((homeSort: string) => setData((d) => ({ ...d, homeSort })), []);
   const defaultCountry = data.settings?.defaultCountry ?? DEFAULT_COUNTRY;
   const setDefaultCountry = useCallback(
@@ -188,6 +192,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       removeCustomVariant,
       setRarityFilter,
       setCategoryFilter,
+      setCardSort,
       setHomeSort,
       defaultCountry,
       setDefaultCountry,
@@ -196,7 +201,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       patchCollection,
       reload,
     }),
-    [data, isOwned, ownedCountry, setCountry, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, setCategoryFilter, setHomeSort, defaultCountry, setDefaultCountry, setHomeView, toggleEra, patchCollection, reload],
+    [data, isOwned, ownedCountry, setCountry, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, setCategoryFilter, setCardSort, setHomeSort, defaultCountry, setDefaultCountry, setHomeView, toggleEra, patchCollection, reload],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
