@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { COUNTRIES, DEFAULT_COUNTRY, flagEmoji } from '../countries';
+import { COUNTRIES, flagEmoji } from '../countries';
+
+const TOP_COUNTRIES = ['BR', 'US', 'JP'];
 import { colors } from '../theme';
 import { matchesQuery } from '../variants';
 
@@ -17,13 +19,12 @@ export function CountryPicker({
   onClose: () => void;
 }) {
   const [q, setQ] = useState('');
+  // Brasil, Estados Unidos e Japão sempre primeiro; do 4º em diante, ordem alfabética
   const list = useMemo(() => {
     const filtered = q.trim() ? COUNTRIES.filter(([code, name]) => matchesQuery(`${name} ${code}`, q)) : COUNTRIES;
-    if (q.trim()) return filtered;
-    // sem busca: Brasil e o país atual primeiro
-    const top = [DEFAULT_COUNTRY, ...(current && current !== DEFAULT_COUNTRY ? [current] : [])];
-    return [...COUNTRIES.filter(([c]) => top.includes(c)), ...filtered.filter(([c]) => !top.includes(c))];
-  }, [q, current]);
+    const top = TOP_COUNTRIES.map((c) => filtered.find(([code]) => code === c)).filter((x): x is [string, string] => !!x);
+    return [...top, ...filtered.filter(([c]) => !TOP_COUNTRIES.includes(c))];
+  }, [q]);
 
   const close = () => {
     setQ('');
