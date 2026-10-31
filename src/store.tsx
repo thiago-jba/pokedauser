@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import type { StoredSet } from './api';
 import { ownedKey, setEntries } from './collection';
 import { AppData, CollectionEntry, deleteSet, loadData, saveData, saveSet } from './storage';
+import { DEFAULT_COUNTRY } from './countries';
 import { ApiVariantDetailed, variantKey } from './variants';
 
 export { ownedKey };
@@ -9,6 +10,9 @@ export { ownedKey };
 interface Store {
   data: AppData;
   isOwned: (setId: string, key: string) => boolean;
+  /** país da carta que eu tenho (undefined = não tenho) */
+  ownedCountry: (setId: string, key: string) => string | undefined;
+  setCountry: (setId: string, key: string, country: string) => void;
   setOwned: (setId: string, keys: string[], value: boolean) => void;
   toggleOwned: (setId: string, key: string) => void;
   upsertCollection: (set: StoredSet) => void;
@@ -42,28 +46,33 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(t);
   }, [data]);
 
-  const ownedSets = useMemo(() => {
-    const m: Record<string, Set<string>> = {};
-    for (const [k, v] of Object.entries(data.owned)) m[k] = new Set(v);
-    return m;
-  }, [data.owned]);
+  const owned = data.owned;
+  const isOwned = useCallback((setId: string, key: string) => !!owned[setId]?.[key], [owned]);
+  const ownedCountry = useCallback((setId: string, key: string) => owned[setId]?.[key], [owned]);
 
-  const isOwned = useCallback((setId: string, key: string) => !!ownedSets[setId]?.has(key), [ownedSets]);
-
+  // marcar = carta nacional (Brasil); quem já tem país mantém o seu
   const setOwned = useCallback((setId: string, keys: string[], value: boolean) => {
     setData((d) => {
-      const cur = new Set(d.owned[setId] ?? []);
-      for (const k of keys) value ? cur.add(k) : cur.delete(k);
-      return { ...d, owned: { ...d.owned, [setId]: [...cur] } };
+      const cur = { ...(d.owned[setId] ?? {}) };
+      for (const k of keys) {
+        if (value) cur[k] = cur[k] ?? DEFAULT_COUNTRY;
+        else delete cur[k];
+      }
+      return { ...d, owned: { ...d.owned, [setId]: cur } };
     });
   }, []);
 
   const toggleOwned = useCallback((setId: string, key: string) => {
     setData((d) => {
-      const cur = new Set(d.owned[setId] ?? []);
-      cur.has(key) ? cur.delete(key) : cur.add(key);
-      return { ...d, owned: { ...d.owned, [setId]: [...cur] } };
+      const cur = { ...(d.owned[setId] ?? {}) };
+      if (cur[key]) delete cur[key];
+      else cur[key] = DEFAULT_COUNTRY;
+      return { ...d, owned: { ...d.owned, [setId]: cur } };
     });
+  }, []);
+
+  const setCountry = useCallback((setId: string, key: string, country: string) => {
+    setData((d) => ({ ...d, owned: { ...d.owned, [setId]: { ...(d.owned[setId] ?? {}), [key]: country } } }));
   }, []);
 
   const upsertCollection = useCallback((set: StoredSet) => {
@@ -82,7 +91,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       };
       // remove marcações de variantes que deixaram de existir
       const valid = new Set(setEntries(set, d.custom[set.id]).map((e) => e.key));
-      const owned = (d.owned[set.id] ?? []).filter((k) => valid.has(k));
+      const owned = Object.fromEntries(Object.entries(d.owned[set.id] ?? {}).filter(([k]) => valid.has(k)));
       const others = d.collections.filter((c) => c.setId !== set.id);
       return { ...d, collections: [entry, ...others], owned: { ...d.owned, [set.id]: owned } };
     });
@@ -115,7 +124,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setData((d) => {
       const forSet = { ...(d.custom[setId] ?? {}) };
       forSet[cardId] = (forSet[cardId] ?? []).filter((x) => variantKey(x) !== key);
-      const owned = (d.owned[setId] ?? []).filter((k) => k !== ownedKey(cardId, key));
+      const owned = { ...(d.owned[setId] ?? {}) };
+      delete owned[ownedKey(cardId, key)];
       return { ...d, custom: { ...d.custom, [setId]: forSet }, owned: { ...d.owned, [setId]: owned } };
     });
   }, []);
@@ -134,6 +144,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     () => ({
       data,
       isOwned,
+      ownedCountry,
+      setCountry,
       setOwned,
       toggleOwned,
       upsertCollection,
@@ -144,7 +156,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setCategoryFilter,
       reload,
     }),
-    [data, isOwned, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, setCategoryFilter, reload],
+    [data, isOwned, ownedCountry, setCountry, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, setCategoryFilter, reload],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

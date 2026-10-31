@@ -34,7 +34,7 @@ const CATEGORY_COLOR: Partial<Record<VariantCategory, string>> = {
 export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { isOwned, toggleOwned, setOwned, upsertCollection, setRarityFilter, setCategoryFilter, data } = useStore();
+  const { isOwned, ownedCountry, toggleOwned, setOwned, upsertCollection, setRarityFilter, setCategoryFilter, data } = useStore();
   const [set, setSet] = useState<StoredSet | null>(() => loadSet(setId));
   const [status, setStatus] = useState<Status>('todas');
   const [rarityPicker, setRarityPicker] = useState(false);
@@ -258,7 +258,7 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
         keyboardShouldPersistTaps="handled"
         ListEmptyComponent={<Text style={styles.empty}>Nenhuma carta com esses filtros.</Text>}
         renderItem={({ item }) => (
-          <CardTile card={item.card} variant={item.variant} owned={isOwned(setId, item.key)} width={tileW} onToggle={onToggle} onOpen={onOpen} />
+          <CardTile card={item.card} variant={item.variant} country={ownedCountry(setId, item.key)} width={tileW} onToggle={onToggle} onOpen={onOpen} />
         )}
       />
 

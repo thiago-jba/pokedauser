@@ -19,8 +19,8 @@ export interface CollectionEntry {
 export interface AppData {
   version: 1;
   collections: CollectionEntry[];
-  /** setId -> lista de "cardId#variantKey" que eu tenho */
-  owned: Record<string, string[]>;
+  /** setId -> "cardId#variantKey" -> país da carta que eu tenho (código ISO, ex.: "BR") */
+  owned: Record<string, Record<string, string>>;
   /** setId -> cardId -> variantes adicionadas à mão */
   custom: Record<string, Record<string, ApiVariantDetailed[]>>;
   /** setId -> último filtro de raridade usado */
@@ -57,7 +57,17 @@ function ensureDirs() {
 export function loadData(): AppData {
   const d = readJson<AppData>(mainFile());
   if (!d || !Array.isArray(d.collections)) return emptyData();
-  return { version: 1, collections: d.collections, owned: d.owned ?? {}, custom: d.custom ?? {}, filters: d.filters ?? {} };
+  return { version: 1, collections: d.collections, owned: migrateOwned(d.owned), custom: d.custom ?? {}, filters: d.filters ?? {} };
+}
+
+/** Versões até 31/10 guardavam só a lista do que eu tenho: tudo vira carta nacional (Brasil). */
+function migrateOwned(owned: any): AppData['owned'] {
+  const out: AppData['owned'] = {};
+  for (const [setId, v] of Object.entries(owned ?? {})) {
+    if (Array.isArray(v)) out[setId] = Object.fromEntries(v.map((k: string) => [k, 'BR']));
+    else if (v && typeof v === 'object') out[setId] = v as Record<string, string>;
+  }
+  return out;
 }
 
 export function saveData(data: AppData) {
@@ -165,7 +175,7 @@ export function restoreBackup(b: BackupFile) {
   saveData({
     version: 1,
     collections: b.data.collections,
-    owned: b.data.owned ?? {},
+    owned: migrateOwned(b.data.owned),
     custom: b.data.custom ?? {},
     filters: b.data.filters ?? {},
   });

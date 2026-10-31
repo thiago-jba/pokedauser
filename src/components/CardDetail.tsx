@@ -3,6 +3,8 @@ import React, { useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { imageUrl, StoredCard, StoredSet } from '../api';
 import { cardVariants, ownedKey } from '../collection';
+import { countryName, flagEmoji } from '../countries';
+import { CountryPicker } from './CountryPicker';
 import { useStore } from '../store';
 import { CARD_RATIO, colors, finishColors } from '../theme';
 import { ApiVariantDetailed, CATEGORY_LABELS, classifyDetailed, FOIL_PT } from '../variants';
@@ -17,7 +19,8 @@ const FOILS = ['cosmos', 'pokeball', 'masterball', 'galaxy', 'cracked-ice', 'gol
 
 export function CardDetail({ set, card, onClose }: { set: StoredSet; card: StoredCard | null; onClose: () => void }) {
   const { width, height } = useWindowDimensions();
-  const { isOwned, toggleOwned, data, addCustomVariant, removeCustomVariant } = useStore();
+  const { ownedCountry, toggleOwned, setCountry, data, addCustomVariant, removeCustomVariant } = useStore();
+  const [pickingFor, setPickingFor] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [type, setType] = useState('holo');
   const [foil, setFoil] = useState<string | null>(null);
@@ -60,7 +63,8 @@ export function CardDetail({ set, card, onClose }: { set: StoredSet; card: Store
             <Text style={styles.section}>Variantes desta carta</Text>
             {variants.map((v) => {
               const k = ownedKey(card.id, v.key);
-              const owned = isOwned(setId, k);
+              const country = ownedCountry(setId, k);
+              const owned = !!country;
               const fc = finishColors[v.finish];
               return (
                 <Pressable key={v.key} style={styles.row} onPress={() => toggleOwned(setId, k)}>
@@ -82,6 +86,15 @@ export function CardDetail({ set, card, onClose }: { set: StoredSet; card: Store
                         }
                       >
                         <Text style={styles.remove}>Remover</Text>
+                      </Pressable>
+                    ) : null}
+                    {country ? (
+                      <Pressable hitSlop={6} onPress={() => setPickingFor(k)} style={styles.countryBtn}>
+                        <Text style={styles.countryFlag}>{flagEmoji(country)}</Text>
+                        <Text style={styles.countryName} numberOfLines={1}>
+                          {countryName(country)}
+                        </Text>
+                        <Text style={styles.countryChange}>trocar ▸</Text>
                       </Pressable>
                     ) : null}
                   </View>
@@ -138,6 +151,12 @@ export function CardDetail({ set, card, onClose }: { set: StoredSet; card: Store
               <Text style={styles.closeText}>Fechar</Text>
             </Pressable>
           </ScrollView>
+          <CountryPicker
+            visible={!!pickingFor}
+            current={pickingFor ? ownedCountry(setId, pickingFor) : undefined}
+            onPick={(code) => pickingFor && setCountry(setId, pickingFor, code)}
+            onClose={() => setPickingFor(null)}
+          />
         </Pressable>
       </Pressable>
     </Modal>
@@ -154,6 +173,21 @@ const styles = StyleSheet.create({
   dot: { width: 12, height: 12, borderRadius: 6, marginRight: 12 },
   rowTitle: { color: colors.text, fontWeight: '600' },
   rowSub: { color: colors.textFaint, fontSize: 12 },
+  countryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    marginTop: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: colors.surface2,
+    maxWidth: '100%',
+  },
+  countryFlag: { fontSize: 16 },
+  countryName: { color: colors.text, fontSize: 13, fontWeight: '600', flexShrink: 1 },
+  countryChange: { color: colors.accent, fontSize: 12, fontWeight: '700' },
   remove: { color: colors.accent, fontSize: 12, fontWeight: '700', marginTop: 2 },
   toggle: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, borderWidth: 1, borderColor: colors.border },
   toggleOn: { backgroundColor: colors.gold, borderColor: colors.gold },
