@@ -49,7 +49,8 @@ const CATEGORY_COLOR: Partial<Record<VariantCategory, string>> = {
 export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { isOwned, ownedCountry, toggleOwned, setOwned, upsertCollection, setRarityFilter, setCategoryFilter, setCardSort, patchCollection, prefsFor, setSetMode, data } = useStore();
+  const { isOwned, ownedCountry, toggleOwned, setOwned, upsertCollection, setRarityFilter, setCategoryFilter, setCardSort, patchCollection, prefsFor, setSetMode, excludeVariants, restoreExcluded, data } = useStore();
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [modePicker, setModePicker] = useState(false);
   const entry = data.collections.find((c) => c.setId === setId);
   const [editingDate, setEditingDate] = useState<string | null>(null);
@@ -189,14 +190,10 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
   };
 
   const bulk = () => {
-    const keys = filtered.map((e) => e.key);
-    if (!keys.length) return;
-    Alert.alert('Marcar em lote', `Aplicar às ${keys.length} cartas que estão na tela agora:`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Desmarcar', onPress: () => setOwned(setId, keys, false) },
-      { text: 'Marcar como tenho', onPress: () => setOwned(setId, keys, true) },
-    ]);
+    if (filtered.length) setBulkOpen(true);
   };
+  const bulkKeys = () => filtered.map((e) => e.key);
+  const hiddenCount = (prefs.excluded ?? []).length;
 
   if (!set) {
     return (
@@ -342,6 +339,20 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
         </Pressable>
       </View>
       <Text style={styles.countText}>{`${filtered.length} na tela · toque para marcar, segure para ver detalhes`}</Text>
+      {hiddenCount > 0 ? (
+        <Pressable
+          style={styles.hiddenRow}
+          onPress={() =>
+            Alert.alert('Variações ocultas', `Voltar a mostrar as ${hiddenCount} variações ocultas desta coleção?`, [
+              { text: 'Cancelar', style: 'cancel' },
+              { text: 'Mostrar de novo', onPress: () => restoreExcluded(setId) },
+            ])
+          }
+        >
+          <Text style={styles.hiddenText}>{`${hiddenCount} ${hiddenCount === 1 ? 'variação oculta' : 'variações ocultas'} · `}</Text>
+          <Text style={styles.hiddenLink}>mostrar de novo</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 
@@ -407,6 +418,50 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
                 <Text style={{ color: '#fff', fontWeight: '700' }}>Pronto</Text>
               </Pressable>
             </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={bulkOpen} transparent animationType="fade" onRequestClose={() => setBulkOpen(false)}>
+        <Pressable style={styles.pickerBackdrop} onPress={() => setBulkOpen(false)}>
+          <Pressable style={[styles.picker, { paddingHorizontal: 18 }]} onPress={() => {}}>
+            <Text style={[styles.pickerTitle, { paddingHorizontal: 0 }]}>Ação em lote</Text>
+            <Text style={[styles.pickerHint, { paddingHorizontal: 0 }]}>
+              {`Vale para as ${filtered.length} cartas que estão na tela agora (com os filtros aplicados).`}
+            </Text>
+            {(
+              [
+                ['Marcar como tenho', () => setOwned(setId, bulkKeys(), true), colors.text],
+                ['Desmarcar', () => setOwned(setId, bulkKeys(), false), colors.text],
+                [
+                  'Ocultar da coleção',
+                  () =>
+                    Alert.alert(
+                      'Ocultar da coleção',
+                      `As ${filtered.length} cartas da tela deixam de aparecer e de contar nesta coleção. Dá para mostrar de novo depois.`,
+                      [
+                        { text: 'Cancelar', style: 'cancel' },
+                        { text: 'Ocultar', style: 'destructive', onPress: () => excludeVariants(setId, bulkKeys()) },
+                      ],
+                    ),
+                  colors.accent,
+                ],
+              ] as const
+            ).map(([label, action, color]) => (
+              <Pressable
+                key={label}
+                style={styles.bulkItem}
+                onPress={() => {
+                  setBulkOpen(false);
+                  action();
+                }}
+              >
+                <Text style={[styles.bulkText, { color }]}>{label}</Text>
+              </Pressable>
+            ))}
+            <Text style={[styles.pickerHint, { paddingHorizontal: 0, marginTop: 6 }]}>
+              Dica: para tirar todas as Promo / Extras, filtre o Tipo de carta "Promo / Extra" e use "Ocultar da coleção".
+            </Text>
           </Pressable>
         </Pressable>
       </Modal>
@@ -601,6 +656,11 @@ const styles = StyleSheet.create({
   rarityBtn: { maxWidth: 140, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, backgroundColor: colors.surface },
   rarityText: { color: colors.text, fontSize: 13, fontWeight: '600' },
   countRow: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginTop: 12, marginBottom: 6 },
+  hiddenRow: { flexDirection: 'row', marginHorizontal: 16, marginBottom: 6 },
+  hiddenText: { color: colors.textFaint, fontSize: 12 },
+  hiddenLink: { color: colors.accent, fontSize: 12, fontWeight: '800' },
+  bulkItem: { paddingVertical: 13, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  bulkText: { fontSize: 16, fontWeight: '700' },
   sortPill: {
     flex: 1,
     marginRight: 12,

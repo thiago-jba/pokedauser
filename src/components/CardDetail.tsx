@@ -142,7 +142,9 @@ export function CardDetail({ set, prefs, card, onClose }: { set: StoredSet; pref
                           )
                         }
                       >
-                        <Text style={styles.hide}>Ocultar da coleção</Text>
+                        <View style={styles.hidePill}>
+                          <Text style={styles.hide}>🚫 Ocultar da coleção</Text>
+                        </View>
                       </Pressable>
                     )}
                     {(() => {
@@ -314,7 +316,17 @@ const styles = StyleSheet.create({
   countryFlag: { fontSize: 16 },
   countryName: { color: colors.text, fontSize: 13, fontWeight: '600', flexShrink: 1 },
   countryChange: { color: colors.accent, fontSize: 12, fontWeight: '700' },
-  hide: { color: colors.textFaint, fontSize: 12, fontWeight: '700', marginTop: 4 },
+  hidePill: {
+    alignSelf: 'flex-start',
+    marginTop: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  hide: { color: colors.textDim, fontSize: 12, fontWeight: '700' },
   othersHint: { color: colors.textFaint, fontSize: 11, alignSelf: 'flex-start', marginBottom: 4 },
   includeBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: colors.accentDim },
   includeText: { color: colors.accent, fontWeight: '800', fontSize: 12 },

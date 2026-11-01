@@ -29,6 +29,10 @@ interface Store {
   setSetMode: (setId: string, mode: SetMode) => void;
   includeVariant: (setId: string, key: string) => void;
   excludeVariant: (setId: string, key: string) => void;
+  /** oculta várias variações de uma vez (as que estão na tela) */
+  excludeVariants: (setId: string, keys: string[]) => void;
+  /** volta a mostrar todas as variações ocultas da coleção */
+  restoreExcluded: (setId: string) => void;
   setHomeSort: (sort: string) => void;
   addPokedexCard: (dexId: number, card: Omit<PokedexCard, 'uid' | 'addedAt'>) => void;
   removePokedexCard: (dexId: number, uid: string) => void;
@@ -190,6 +194,19 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       ),
     [], // eslint-disable-line react-hooks/exhaustive-deps
   );
+  const excludeVariants = useCallback(
+    (setId: string, keys: string[]) =>
+      updPrefs(setId, (p) => {
+        const ks = new Set(keys);
+        const included = (p.included ?? []).filter((k) => !ks.has(k));
+        const wasIncluded = new Set(p.included ?? []);
+        // as que eram extras incluídas só saem das incluídas; as demais vão para as ocultas
+        const toExclude = keys.filter((k) => !wasIncluded.has(k));
+        return { ...p, included, excluded: [...new Set([...(p.excluded ?? []), ...toExclude])] };
+      }),
+    [], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const restoreExcluded = useCallback((setId: string) => updPrefs(setId, (p) => ({ ...p, excluded: [] })), []); // eslint-disable-line react-hooks/exhaustive-deps
   const setCardSort = useCallback((setId: string, sort: string) => {
     setData((d) => ({ ...d, filters: { ...d.filters, [setId]: { ...d.filters[setId], sort } } }));
   }, []);
@@ -246,6 +263,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setSetMode,
       includeVariant,
       excludeVariant,
+      excludeVariants,
+      restoreExcluded,
       setHomeSort,
       addPokedexCard,
       removePokedexCard,
@@ -257,7 +276,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       patchCollection,
       reload,
     }),
-    [data, isOwned, ownedCountry, setCountry, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, setCategoryFilter, setCardSort, prefsFor, setSetMode, includeVariant, excludeVariant, setHomeSort, addPokedexCard, removePokedexCard, setPokedexFilters, defaultCountry, setDefaultCountry, setHomeView, toggleEra, patchCollection, reload],
+    [data, isOwned, ownedCountry, setCountry, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, setCategoryFilter, setCardSort, prefsFor, setSetMode, includeVariant, excludeVariant, excludeVariants, restoreExcluded, setHomeSort, addPokedexCard, removePokedexCard, setPokedexFilters, defaultCountry, setDefaultCountry, setHomeView, toggleEra, patchCollection, reload],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
