@@ -7,6 +7,7 @@ import { GlassShine } from '../components/Glass';
 import { IconButton } from '../components/ui';
 import { countryName, flagEmoji } from '../countries';
 import { useStore } from '../store';
+import { WEB_URL } from '../sync/config';
 import { colors } from '../theme';
 
 /** Configurações do app. Novas opções entram aqui como novas linhas. */
@@ -83,7 +84,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
               <Text style={styles.rowTitle}>{`☁︎ Conectado como ${cloud.email}`}</Text>
               <Text style={styles.rowHint}>
                 {cloud.syncing ? 'sincronizando…' : when(cloud.lastSync)}
-                {Platform.OS === 'web' ? '' : ' · o mesmo e-mail e senha funcionam no computador'}
+                {Platform.OS === 'web' ? '' : ` · no computador, abra ${WEB_URL} e entre com o mesmo e-mail e senha`}
               </Text>
               {cloud.error ? <Text style={styles.error}>{cloud.error}</Text> : null}
               <View style={styles.btnRow}>
