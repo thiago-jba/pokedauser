@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Flag } from '../components/Flag';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Alert } from '../alert';
 import { CountryPicker } from '../components/CountryPicker';
 import { GlassShine } from '../components/Glass';
 import { IconButton } from '../components/ui';
-import { countryName, flagEmoji } from '../countries';
+import { countryName } from '../countries';
 import { useStore } from '../store';
 import { WEB_URL } from '../sync/config';
 import { colors } from '../theme';
@@ -64,7 +65,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
               </Text>
             </View>
             <View style={styles.value}>
-              <Text style={styles.flag}>{flagEmoji(defaultCountry)}</Text>
+              <Flag code={defaultCountry} size={22} />
               <Text style={styles.valueText} numberOfLines={1}>
                 {countryName(defaultCountry)}
               </Text>

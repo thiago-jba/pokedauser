@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { COUNTRIES, flagEmoji } from '../countries';
+import { Flag } from './Flag';
+import { COUNTRIES } from '../countries';
 
 const TOP_COUNTRIES = ['BR', 'US', 'JP'];
 import { colors } from '../theme';
@@ -59,7 +60,7 @@ export function CountryPicker({
                   close();
                 }}
               >
-                <Text style={styles.flag}>{flagEmoji(code)}</Text>
+                <Flag code={code} size={24} />
                 <Text style={[styles.name, code === current && { color: colors.gold, fontWeight: '800' }]}>{name}</Text>
                 {code === current ? <Text style={styles.tick}>✓</Text> : null}
               </Pressable>

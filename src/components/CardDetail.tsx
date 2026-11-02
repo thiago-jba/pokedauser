@@ -1,12 +1,13 @@
 import { Image } from 'expo-image';
 import React, { useEffect, useState } from 'react';
 import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Flag } from './Flag';
 import { useAppDimensions } from '../dimensions';
 import { Alert } from '../alert';
 import { cardImage, StoredCard, StoredSet } from '../api';
 import { cardVariants, otherVariants, ownedKey } from '../collection';
 import type { SetPrefs } from '../collection';
-import { countryName, flagEmoji } from '../countries';
+import { countryName } from '../countries';
 import { CountryPicker } from './CountryPicker';
 import {
   cachedRates,
@@ -173,7 +174,7 @@ export function CardDetail({ set, prefs, card, onClose }: { set: StoredSet; pref
                     })()}
                     {country ? (
                       <Pressable hitSlop={6} onPress={() => setPickingFor(k)} style={styles.countryBtn}>
-                        <Text style={styles.countryFlag}>{flagEmoji(country)}</Text>
+                        <Flag code={country} size={16} />
                         <Text style={styles.countryName} numberOfLines={1}>
                           {countryName(country)}
                         </Text>

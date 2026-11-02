@@ -1,8 +1,9 @@
 import { Image } from 'expo-image';
 import React, { memo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Flag } from './Flag';
 import { cardImage, StoredCard } from '../api';
-import { countryName, flagEmoji } from '../countries';
+import { countryName } from '../countries';
 import { CARD_RATIO, colors, finishColors } from '../theme';
 import type { CardVariant } from '../variants';
 
@@ -58,7 +59,7 @@ function CardTileBase({ card, variant, country, width, onToggle, onOpen }: Props
         )}
         {country ? (
           <View style={styles.flag}>
-            <Text style={styles.flagText}>{flagEmoji(country)}</Text>
+            <Flag code={country} size={17} />
           </View>
         ) : null}
       </View>
