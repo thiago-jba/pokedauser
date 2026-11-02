@@ -2,7 +2,7 @@
 //  - TCGplayer (EUA, US$) e Cardmarket (Europa, €): vêm da TCGdex, preço de mercado (TCGplayer: média das vendas; Cardmarket: tendência).
 //  - Liga Pokémon e Jornada Games: não têm acesso aberto aos dados, então o app abre a página
 //    da carta no site, onde aparece o preço atual em reais.
-import { Directory, File, Paths } from 'expo-file-system';
+import { kvDelete, kvReadJson, kvWriteJson } from './kv';
 import type { StoredSet } from './api';
 import { addDays, localDate, toDayPrices } from './evolution';
 import type { History } from './evolution';
@@ -73,34 +73,20 @@ export async function fetchSetPrices(set: StoredSet, onProgress?: (done: number,
 
 // ---------- armazenamento ----------
 
-const pricesDir = () => new Directory(Paths.document, 'precos');
-const pricesFile = (id: string) => new File(pricesDir(), `${id.replace(/[^a-zA-Z0-9._-]/g, '_')}.json`);
-const ratesFile = () => new File(Paths.document, 'cotacao.json');
+const safe = (id: string) => id.replace(/[^a-zA-Z0-9._-]/g, '_');
+const pricesPath = (id: string) => `precos/${safe(id)}.json`;
+const RATES = 'cotacao.json';
 const priceCache = new Map<string, SetPrices | null>();
-
-function readJson<T>(f: File): T | null {
-  try {
-    return f.exists ? (JSON.parse(f.textSync()) as T) : null;
-  } catch {
-    return null;
-  }
-}
-function writeJson(f: File, data: unknown) {
-  if (!f.exists) f.create({ intermediates: true } as any);
-  f.write(JSON.stringify(data));
-}
 
 export function loadSetPrices(setId: string): SetPrices | null {
   if (priceCache.has(setId)) return priceCache.get(setId) ?? null;
-  const p = readJson<SetPrices>(pricesFile(setId));
+  const p = kvReadJson<SetPrices>(pricesPath(setId));
   priceCache.set(setId, p);
   return p;
 }
 
 export function saveSetPrices(setId: string, p: SetPrices) {
-  const d = pricesDir();
-  if (!d.exists) d.create({ intermediates: true, idempotent: true } as any);
-  writeJson(pricesFile(setId), p);
+  kvWriteJson(pricesPath(setId), p);
   priceCache.set(setId, p);
   recordHistory(setId, p);
 }
@@ -108,13 +94,12 @@ export function saveSetPrices(setId: string, p: SetPrices) {
 // ---------- histórico diário (para o gráfico de evolução) ----------
 
 const HISTORY_KEEP_DAYS = 70;
-const histDir = () => new Directory(Paths.document, 'historico');
-const histFile = (id: string) => new File(histDir(), `${id.replace(/[^a-zA-Z0-9._-]/g, '_')}.json`);
+const histPath = (id: string) => `historico/${safe(id)}.json`;
 const histCache = new Map<string, History | null>();
 
 export function loadHistory(setId: string): History | null {
   if (histCache.has(setId)) return histCache.get(setId) ?? null;
-  const h = readJson<History>(histFile(setId));
+  const h = kvReadJson<History>(histPath(setId));
   histCache.set(setId, h);
   return h;
 }
@@ -127,20 +112,14 @@ function recordHistory(setId: string, p: SetPrices) {
     h[today] = toDayPrices(p.cards);
     const oldest = addDays(today, -HISTORY_KEEP_DAYS);
     for (const day of Object.keys(h)) if (day < oldest) delete h[day];
-    const dir = histDir();
-    if (!dir.exists) dir.create({ intermediates: true, idempotent: true } as any);
-    writeJson(histFile(setId), h);
+    kvWriteJson(histPath(setId), h);
     histCache.set(setId, h);
   } catch {}
 }
 
 export function deleteSetPrices(setId: string) {
-  try {
-    const f = pricesFile(setId);
-    if (f.exists) f.delete();
-    const hf = histFile(setId);
-    if (hf.exists) hf.delete();
-  } catch {}
+  kvDelete(pricesPath(setId));
+  kvDelete(histPath(setId));
   priceCache.delete(setId);
   histCache.delete(setId);
 }
@@ -152,13 +131,13 @@ export function pricesAreStale(p: SetPrices | null): boolean {
 
 /** Cotação do dólar e do euro em reais (atualizada a cada 12h). */
 export async function getRates(): Promise<Rates | null> {
-  const cached = readJson<Rates>(ratesFile());
+  const cached = kvReadJson<Rates>(RATES);
   if (cached && Date.now() - new Date(cached.fetchedAt).getTime() < 12 * 3600000) return cached;
   try {
     const j = await (await fetch(RATES_URL)).json();
     const r: Rates = { usd: parseFloat(j.USDBRL.bid), eur: parseFloat(j.EURBRL.bid), fetchedAt: new Date().toISOString() };
     if (r.usd > 0 && r.eur > 0) {
-      writeJson(ratesFile(), r);
+      kvWriteJson(RATES, r);
       return r;
     }
   } catch {}
@@ -166,7 +145,7 @@ export async function getRates(): Promise<Rates | null> {
 }
 
 export function cachedRates(): Rates | null {
-  return readJson<Rates>(ratesFile());
+  return kvReadJson<Rates>(RATES);
 }
 
 

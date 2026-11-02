@@ -9,6 +9,7 @@ import { useStore } from '../store';
 import { CARD_RATIO, colors } from '../theme';
 import { matchesQuery, normalize } from '../variants';
 import { CardScanner } from './CardScanner';
+import { ocrAvailable } from '../ocr';
 import { Chip } from './ui';
 
 interface Suggestion {
@@ -268,6 +269,7 @@ export function AddPokedexCard({
           <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 18 }}>
             <Text style={styles.title}>{`Adicionar carta de ${pokemonName}`}</Text>
 
+            {ocrAvailable ? (
             <Pressable style={styles.camBtn} onPress={() => setScanning(true)}>
               <Text style={styles.camIcon}>📷</Text>
               <View style={{ flex: 1 }}>
@@ -275,6 +277,7 @@ export function AddPokedexCard({
                 <Text style={styles.camSub}>Aponte para o rodapé da carta</Text>
               </View>
             </Pressable>
+            ) : null}
             {scanMsg ? <Text style={styles.scanMsg}>{scanMsg}</Text> : null}
             {loading ? <ActivityIndicator color={colors.accent} style={{ marginTop: 8 }} /> : null}
 

@@ -1,18 +1,9 @@
 import * as DocumentPicker from 'expo-document-picker';
 import * as Sharing from 'expo-sharing';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Alert,
-  FlatList,
-  Keyboard,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { FlatList, Keyboard, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useAppDimensions } from '../dimensions';
+import { Alert } from '../alert';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchAllSets, fetchFullSet, fetchSetInfo, SetSummary } from '../api';
 import { applySavedFilters, formatPct, progress, setEntries } from '../collection';
@@ -46,6 +37,7 @@ import {
   buildBackup,
   CollectionEntry,
   loadSet,
+  saveSet,
   loadSetsCache,
   loadSetsCacheAnyAge,
   readBackupFile,
@@ -59,8 +51,10 @@ import { matchesQuery } from '../variants';
 
 export function HomeScreen({ openSet, openSettings }: { openSet: (setId: string) => void; openSettings: () => void }) {
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
-  const { data, isOwned, upsertCollection, removeCollection, reload, setHomeSort, setHomeView, toggleEra, patchCollection, prefsFor } = useStore();
+  const { width } = useAppDimensions();
+  // quadros por linha: 2 no celular, mais em telas largas (computador/tablet)
+  const homeCols = width >= 900 ? 4 : width >= 600 ? 3 : 2;
+  const { data, isOwned, upsertCollection, removeCollection, reload, setHomeSort, setHomeView, toggleEra, patchCollection, prefsFor, cloud } = useStore();
   const [sortPicker, setSortPicker] = useState(false);
   const [rates, setRates] = useState<Rates | null>(() => cachedRates());
   const [pricesVersion, setPricesVersion] = useState(0);
@@ -215,11 +209,35 @@ export function HomeScreen({ openSet, openSettings }: { openSet: (setId: string)
       if (isCollapsed) continue;
       if (view === 'lista') for (const item of g.list) out.push({ kind: 'row', item });
       else
-        for (let i = 0; i < g.list.length; i += 2)
-          out.push({ kind: 'tiles', key: `${g.era}-${i}`, items: g.list.slice(i, i + 2) });
+        for (let i = 0; i < g.list.length; i += homeCols)
+          out.push({ kind: 'tiles', key: `${g.era}-${i}`, items: g.list.slice(i, i + homeCols) });
     }
     return out;
-  }, [groups, collapsed, view]);
+  }, [groups, collapsed, view, homeCols]);
+
+  // Coleções que chegaram pela nuvem (de outro aparelho) ainda sem as cartas neste aparelho: baixa sozinho
+  const [downloading, setDownloading] = useState<string | null>(null);
+  useEffect(() => {
+    const missing = data.collections.filter((c) => !loadSet(c.setId));
+    if (!missing.length) return;
+    let alive = true;
+    (async () => {
+      for (let i = 0; i < missing.length && alive; i++) {
+        const c = missing[i];
+        setDownloading(`baixando cartas de ${c.namePt ?? c.nameEn} (${i + 1}/${missing.length})…`);
+        try {
+          saveSet(await fetchFullSet(c.setId));
+          if (alive) setPricesVersion((v) => v + 1);
+        } catch {
+          break; // sem internet: tenta na próxima vez
+        }
+      }
+      if (alive) setDownloading(null);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [data.collections.map((c) => c.setId).join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Coleções adicionadas antes desta versão não têm o código (ex.: 30C): busca só os dados básicos.
   useEffect(() => {
@@ -328,6 +346,7 @@ export function HomeScreen({ openSet, openSettings }: { openSet: (setId: string)
     setMenu(false);
     try {
       const uri = writeBackupFile(buildBackup(data));
+      if (Platform.OS === 'web') return; // no navegador o arquivo já foi baixado
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, { mimeType: 'application/json', dialogTitle: 'Salvar backup da coleção' });
       } else {
@@ -364,7 +383,7 @@ export function HomeScreen({ openSet, openSettings }: { openSet: (setId: string)
     }
   };
 
-  const colW = (width - 16 * 2 - 12) / 2;
+  const colW = (width - 16 * 2 - 12 * (homeCols - 1)) / homeCols;
   const searching = query.trim().length > 0;
 
   return (
@@ -378,6 +397,13 @@ export function HomeScreen({ openSet, openSettings }: { openSet: (setId: string)
               : `${data.collections.length} ${data.collections.length === 1 ? 'expansão' : 'expansões'}`}
           </Text>
         </View>
+        {cloud.configured ? (
+          <Pressable onPress={openSettings} style={styles.cloudPill} hitSlop={6}>
+            <Text style={[styles.cloudText, cloud.error && !cloud.syncing ? { color: colors.accent } : null]} numberOfLines={1}>
+              {!cloud.email ? '☁︎ Conectar' : cloud.syncing ? '☁︎ …' : cloud.error ? '☁︎ !' : '☁︎ ✓'}
+            </Text>
+          </Pressable>
+        ) : null}
         <IconButton label="⋮" onPress={() => setMenu(true)} accessibilityLabel="Menu" />
       </View>
 
@@ -482,7 +508,7 @@ export function HomeScreen({ openSet, openSettings }: { openSet: (setId: string)
                 ]}
               >
                 <EvolutionPanel baskets={baskets} rates={rates} version={pricesVersion} />
-                {bgPrices ? <Text style={styles.bgPrices}>{bgPrices}</Text> : null}
+                {downloading || bgPrices ? <Text style={styles.bgPrices}>{downloading ?? bgPrices}</Text> : null}
               </SummaryCard>
             ) : null}
             {dexSummary.cardsCount > 0 ? (
@@ -615,6 +641,16 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, marginBottom: 12 },
   h1: { color: colors.text, fontSize: 34, fontWeight: '900', letterSpacing: -0.5 },
   h2: { color: colors.textDim, marginTop: 2 },
+  cloudPill: {
+    marginRight: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  cloudText: { color: colors.text, fontWeight: '800', fontSize: 13 },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',

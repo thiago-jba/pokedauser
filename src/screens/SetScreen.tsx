@@ -1,16 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Alert,
-  FlatList,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useAppDimensions } from '../dimensions';
+import { Alert } from '../alert';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchFullSet, StoredCard, StoredSet } from '../api';
 import { allCards, applySavedFilters, Entry, formatPct, modeOf, ownedKey, progress, setEntries } from '../collection';
@@ -48,7 +39,7 @@ const CATEGORY_COLOR: Partial<Record<VariantCategory, string>> = {
 
 export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void }) {
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width } = useAppDimensions();
   const { isOwned, ownedCountry, toggleOwned, setOwned, upsertCollection, setRarityFilter, setCategoryFilter, setCardSort, patchCollection, prefsFor, setSetMode, excludeVariants, restoreExcluded, data } = useStore();
   const [bulkOpen, setBulkOpen] = useState(false);
   const [modePicker, setModePicker] = useState(false);
@@ -210,7 +201,7 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
     );
   }
 
-  const cols = width >= 600 ? 5 : 3;
+  const cols = width >= 900 ? 6 : width >= 600 ? 5 : 3;
   const tileW = (width - 16 * 2 - cols * 8) / cols;
   const rarityLabel =
     selectedRarities.length === 0 ? 'Raridade ▾' : selectedRarities.length === 1 ? selectedRarities[0] : `${selectedRarities.length} raridades`;

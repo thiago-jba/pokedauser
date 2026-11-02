@@ -40,6 +40,14 @@
           "recordAudioAndroid": false
         }
       ]
-    ]
+    ],
+    "web": {
+      "output": "single",
+      "bundler": "metro",
+      "favicon": "./assets/icon.png",
+      "name": "Coleção TCG",
+      "backgroundColor": "#0B0C18",
+      "themeColor": "#0B0C18"
+    }
   }
 }

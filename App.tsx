@@ -1,7 +1,9 @@
 import { Image } from 'expo-image';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
-import { BackHandler, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, BackHandler, Platform, StyleSheet, View } from 'react-native';
+import { MAX_APP_WIDTH } from './src/dimensions';
+import { initKv } from './src/kv';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { UpdateBanner } from './src/components/UpdateBanner';
@@ -24,6 +26,11 @@ type Route =
 
 export default function App() {
   const [route, setRoute] = useState<Route>({ name: 'home' });
+  // no navegador os dados salvos são carregados antes de abrir (no celular já estão prontos)
+  const [ready, setReady] = useState(Platform.OS !== 'web');
+  useEffect(() => {
+    if (!ready) initKv().finally(() => setReady(true));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // botão "voltar" do Android
   useEffect(() => {
@@ -41,6 +48,14 @@ export default function App() {
     return () => sub.remove();
   }, [route]);
 
+  if (!ready) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={colors.accent} size="large" />
+      </View>
+    );
+  }
+
   return (
     <SafeAreaProvider>
       <StoreProvider>
@@ -48,6 +63,8 @@ export default function App() {
           {/* papel de parede fixo: o "vidro" dos painéis deixa ele aparecer */}
           <Image source={require('./assets/wallpaper.jpg')} style={StyleSheet.absoluteFill} contentFit="cover" />
           <StatusBar style="light" />
+          {/* no computador o app fica centralizado, com largura máxima */}
+          <View style={{ flex: 1, width: '100%', maxWidth: Platform.OS === 'web' ? MAX_APP_WIDTH : undefined, alignSelf: 'center' }}>
           <ErrorBoundary onReset={() => setRoute({ name: 'home' })}>
             {route.name === 'home' ? (
               <HomeScreen
@@ -76,6 +93,7 @@ export default function App() {
             />
           ) : null}
           <UpdateBanner />
+          </View>
         </View>
       </StoreProvider>
     </SafeAreaProvider>

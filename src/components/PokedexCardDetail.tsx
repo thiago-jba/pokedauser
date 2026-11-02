@@ -1,6 +1,8 @@
 import { Image } from 'expo-image';
 import React, { useEffect, useState } from 'react';
-import { Alert, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useAppDimensions } from '../dimensions';
+import { Alert } from '../alert';
 import { fetchSetInfo } from '../api';
 import type { StoredCard, StoredSet } from '../api';
 import { fetchCardDetail } from '../pokedex';
@@ -13,7 +15,7 @@ import type { VariantCategory } from '../variants';
 
 /** Detalhe de uma carta da Pokédex: foto grande, tipo, raridade, preços e atalhos para as lojas. */
 export function PokedexCardDetail({ card, onClose, onRemove }: { card: PokedexCard | null; onClose: () => void; onRemove: () => void }) {
-  const { width, height } = useWindowDimensions();
+  const { width, height } = useAppDimensions();
   const [price, setPrice] = useState<VariantPrice | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [rates, setRates] = useState<Rates | null>(() => cachedRates());

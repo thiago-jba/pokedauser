@@ -1,5 +1,5 @@
 // Pokédex: lista de Pokémon (baixada da PokéAPI e guardada no celular) e cartas de cada Pokémon (TCGdex).
-import { File, Paths } from 'expo-file-system';
+import { kvReadJson, kvWriteJson } from './kv';
 import { cardPrices } from './priceUtil';
 import type { VariantPrice } from './priceUtil';
 import { buildVariants, cleanRaw, detectSetWideStamps, rarityPt } from './variants';
@@ -53,26 +53,16 @@ export function nameFromSlug(slug: string): string {
 
 // ---------- lista de Pokémon ----------
 
-const speciesFile = () => new File(Paths.document, 'pokedex_especies.json');
+const SPECIES = 'pokedex_especies.json';
 
 export function loadSpeciesCache(): Species[] | null {
-  try {
-    const f = speciesFile();
-    if (!f.exists) return null;
-    const j = JSON.parse(f.textSync());
-    return Array.isArray(j.list) && j.list.length ? j.list : null;
-  } catch {
-    return null;
-  }
+  const j = kvReadJson<{ list: Species[] }>(SPECIES);
+  return j && Array.isArray(j.list) && j.list.length ? j.list : null;
 }
 
 function speciesCacheAgeDays(): number {
-  try {
-    const j = JSON.parse(speciesFile().textSync());
-    return (Date.now() - new Date(j.fetchedAt).getTime()) / 86400000;
-  } catch {
-    return Infinity;
-  }
+  const j = kvReadJson<{ fetchedAt: string }>(SPECIES);
+  return j ? (Date.now() - new Date(j.fetchedAt).getTime()) / 86400000 : Infinity;
 }
 
 /** Lista todas as espécies em ordem da Pokédex nacional, com o nome oficial. */
@@ -92,9 +82,7 @@ export async function fetchSpecies(): Promise<Species[]> {
     for (const s of list) s.name = names.get(s.id) ?? s.name;
   } catch {}
 
-  const f = speciesFile();
-  if (!f.exists) f.create();
-  f.write(JSON.stringify({ fetchedAt: new Date().toISOString(), list }));
+  kvWriteJson(SPECIES, { fetchedAt: new Date().toISOString(), list });
   return list;
 }
 

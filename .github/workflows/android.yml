@@ -93,6 +93,26 @@ jobs:
           MSG=$(git log -1 --pretty=%s | cut -c1-200)
           npx --yes eas-cli@latest update --channel production --platform android --environment production --message "$MSG" --non-interactive
 
+      # ---------- versão para navegador (computador) ----------
+
+      - name: Publicar versão web
+        if: env.EXPO_TOKEN != ''
+        run: |
+          set -o pipefail
+          rm -rf dist
+          ( npx expo export --platform web && npx --yes eas-cli@latest deploy --prod --non-interactive ) 2>&1 | tee web.log
+          URL=$(grep -oE 'https://[a-z0-9.-]+\.expo\.app' web.log | tail -1 || true)
+          echo "::notice title=Endereço da versão web::${URL:-não encontrado no log}"
+        continue-on-error: true
+
+      - name: Detalhes da versão web (se falhou)
+        if: failure() || always()
+        run: |
+          if [ -f web.log ] && ! grep -qE 'https://[a-z0-9.-]+\.expo\.app' web.log; then
+            MSG=$(tail -45 web.log | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::warning title=Log da versão web::${MSG}"
+          fi
+
       # ---------- APK (só quando necessário) ----------
 
       - name: Número da versão

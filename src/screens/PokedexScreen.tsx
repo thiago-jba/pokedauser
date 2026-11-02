@@ -1,7 +1,10 @@
 import { Image } from 'expo-image';
 import React, { memo, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Modal, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useAppDimensions } from '../dimensions';
+import { Alert } from '../alert';
 import { CardScanner } from '../components/CardScanner';
+import { ocrAvailable } from '../ocr';
 import { fetchAllSets } from '../api';
 import { loadSetsCacheAnyAge, saveSetsCache } from '../storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,7 +24,7 @@ type Status = 'todos' | 'tenho' | 'faltam';
 
 export function PokedexScreen({ openPokemon }: { openPokemon: (id: number, prefill?: PokemonCardBrief) => void }) {
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width } = useAppDimensions();
   const { data, setPokedexFilters } = useStore();
   const [picker, setPicker] = useState<'tipo' | 'raridade' | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -123,7 +126,7 @@ export function PokedexScreen({ openPokemon }: { openPokemon: (id: number, prefi
     });
   }, [species, dex, q, status]);
 
-  const cols = width >= 600 ? 5 : 3;
+  const cols = width >= 900 ? 7 : width >= 600 ? 5 : 3;
   const tileW = (width - 16 * 2 - cols * 8) / cols;
   const total = species?.length ?? 0;
 
@@ -145,9 +148,11 @@ export function PokedexScreen({ openPokemon }: { openPokemon: (id: number, prefi
           <View style={{ paddingHorizontal: 16 }}>
             <View style={styles.titleRow}>
               <Text style={styles.h1}>Pokédex</Text>
+{ocrAvailable ? (
               <Pressable style={styles.scanBtn} onPress={() => setScanning(true)} disabled={identifying}>
                 {identifying ? <ActivityIndicator color={colors.text} /> : <Text style={styles.scanText}>📷 Ler carta</Text>}
               </Pressable>
+              ) : null}
             </View>
             <View style={styles.summary}>
               <GlassShine r={24} />

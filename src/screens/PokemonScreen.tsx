@@ -1,6 +1,8 @@
 import { Image } from 'expo-image';
 import React, { useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useAppDimensions } from '../dimensions';
+import { Alert } from '../alert';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AddPokedexCard } from '../components/AddPokedexCard';
 import { GlassShine } from '../components/Glass';
@@ -14,15 +16,15 @@ import { CARD_RATIO, colors } from '../theme';
 
 export function PokemonScreen({ dexId, onBack, prefill }: { dexId: number; onBack: () => void; prefill?: PokemonCardBrief }) {
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width } = useAppDimensions();
   const { data, removePokedexCard } = useStore();
   // se veio da câmera da tela principal, já abre a inclusão com a carta lida
   const [adding, setAdding] = useState(!!prefill);
   const [detail, setDetail] = useState<PokedexCard | null>(null);
   const name = loadSpeciesCache()?.find((s) => s.id === dexId)?.name ?? dexNumber(dexId);
   const cards = data.pokedex?.[dexId] ?? [];
-  const cols = 2;
-  const w = (width - 16 * 2 - 12) / cols;
+  const cols = width >= 900 ? 4 : width >= 600 ? 3 : 2;
+  const w = (width - 16 * 2 - 12 * (cols - 1)) / cols;
 
   const remove = (c: PokedexCard) =>
     Alert.alert('Remover carta', `Remover "${c.name}" (${c.setName}) da Pokédex?`, [
@@ -39,6 +41,7 @@ export function PokemonScreen({ dexId, onBack, prefill }: { dexId: number; onBac
       <FlatList
         data={cards}
         keyExtractor={(c) => c.uid}
+        key={`cartas-${cols}`}
         numColumns={cols}
         columnWrapperStyle={{ gap: 12, paddingHorizontal: 16 }}
         contentContainerStyle={{ gap: 12, paddingBottom: insets.bottom + 32 }}

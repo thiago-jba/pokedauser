@@ -1,6 +1,6 @@
-import TextRecognition from '@react-native-ml-kit/text-recognition';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { File } from 'expo-file-system';
+import { deleteTempFile } from '../kv';
+import { readTextFromImage } from '../ocr';
 import React, { useRef, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,15 +25,13 @@ export function CardScanner({ visible, onClose, onRead }: { visible: boolean; on
     try {
       const photo = await cam.current.takePictureAsync({ quality: 0.8 });
       if (!photo?.uri) throw new Error('sem foto');
-      const result = await TextRecognition.recognize(photo.uri);
-      try {
-        new File(photo.uri).delete();
-      } catch {}
-      if (!result.text?.trim()) {
+      const text = await readTextFromImage(photo.uri);
+      deleteTempFile(photo.uri);
+      if (!text.trim()) {
         setMsg('Não consegui ler nada. Aproxime o rodapé da carta e evite reflexo.');
         return;
       }
-      onRead(result.text);
+      onRead(text);
     } catch {
       setMsg('Não foi possível ler a carta. Tente de novo.');
     } finally {

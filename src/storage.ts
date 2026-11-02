@@ -1,5 +1,5 @@
 // Armazenamento local no celular (arquivos JSON na pasta privada do app).
-import { Directory, File, Paths } from 'expo-file-system';
+import { kvDelete, kvReadJson, kvWrite, readPickedFile, writeTempFile } from './kv';
 import type { SetSummary, StoredSet } from './api';
 import { ApiVariantDetailed, detectSetWideStamps, keyToVariant } from './variants';
 
@@ -75,33 +75,17 @@ export interface AppSettings {
 
 export const emptyData = (): AppData => ({ version: 1, collections: [], owned: {}, custom: {}, filters: {} });
 
-const setsDir = () => new Directory(Paths.document, 'sets');
-const mainFile = () => new File(Paths.document, 'colecao.json');
-const setsCacheFile = () => new File(Paths.document, 'lista_expansoes.json');
+const MAIN = 'colecao.json';
+const SETS_CACHE = 'lista_expansoes.json';
 const safeName = (id: string) => id.replace(/[^a-zA-Z0-9._-]/g, '_');
-const setFile = (id: string) => new File(setsDir(), `${safeName(id)}.json`);
-
-function writeText(file: File, text: string) {
-  if (!file.exists) file.create({ intermediates: true } as any);
-  file.write(text);
-}
-
-function readJson<T>(file: File): T | null {
-  try {
-    if (!file.exists) return null;
-    return JSON.parse(file.textSync()) as T;
-  } catch {
-    return null;
-  }
-}
-
-function ensureDirs() {
-  const d = setsDir();
-  if (!d.exists) d.create({ intermediates: true, idempotent: true } as any);
-}
+const setPath = (id: string) => `sets/${safeName(id)}.json`;
 
 export function loadData(): AppData {
-  const d = readJson<AppData>(mainFile());
+  return normalizeData(kvReadJson<AppData>(MAIN));
+}
+
+/** Garante todos os campos (dados antigos, vindos da nuvem ou de backup). */
+export function normalizeData(d: any): AppData {
   if (!d || !Array.isArray(d.collections)) return emptyData();
   return {
     version: 1,
@@ -130,7 +114,7 @@ function migrateOwned(owned: any): AppData['owned'] {
 }
 
 export function saveData(data: AppData) {
-  writeText(mainFile(), JSON.stringify(data));
+  kvWrite(MAIN, JSON.stringify(data));
 }
 
 const setCache = new Map<string, StoredSet>();
@@ -153,7 +137,7 @@ function migrateSet(old: any): StoredSet {
 export function loadSet(id: string): StoredSet | null {
   const cached = setCache.get(id);
   if (cached) return cached;
-  let s = readJson<any>(setFile(id));
+  let s = kvReadJson<any>(setPath(id));
   if (!s) return null;
   if (s.schema !== 2) {
     s = migrateSet(s);
@@ -166,34 +150,30 @@ export function loadSet(id: string): StoredSet | null {
 }
 
 export function saveSet(set: StoredSet) {
-  ensureDirs();
-  writeText(setFile(set.id), JSON.stringify(set));
+  kvWrite(setPath(set.id), JSON.stringify(set));
   setCache.set(set.id, set);
 }
 
 export function deleteSet(id: string) {
-  try {
-    const f = setFile(id);
-    if (f.exists) f.delete();
-  } catch {}
+  kvDelete(setPath(id));
   setCache.delete(id);
 }
 
 const SETS_CACHE_DAYS = 3;
 
 export function loadSetsCache(): SetSummary[] | null {
-  const c = readJson<{ fetchedAt: string; list: SetSummary[] }>(setsCacheFile());
+  const c = kvReadJson<{ fetchedAt: string; list: SetSummary[] }>(SETS_CACHE);
   if (!c) return null;
   const age = Date.now() - new Date(c.fetchedAt).getTime();
   return age < SETS_CACHE_DAYS * 86400000 ? c.list : null;
 }
 
 export function loadSetsCacheAnyAge(): SetSummary[] | null {
-  return readJson<{ fetchedAt: string; list: SetSummary[] }>(setsCacheFile())?.list ?? null;
+  return kvReadJson<{ fetchedAt: string; list: SetSummary[] }>(SETS_CACHE)?.list ?? null;
 }
 
 export function saveSetsCache(list: SetSummary[]) {
-  writeText(setsCacheFile(), JSON.stringify({ fetchedAt: new Date().toISOString(), list }));
+  kvWrite(SETS_CACHE, JSON.stringify({ fetchedAt: new Date().toISOString(), list }));
 }
 
 // ---------- Backup ----------
@@ -214,14 +194,11 @@ export function buildBackup(data: AppData): BackupFile {
 /** Grava o backup num arquivo temporário e devolve o caminho para compartilhar. */
 export function writeBackupFile(backup: BackupFile): string {
   const stamp = backup.exportedAt.slice(0, 10);
-  const f = new File(Paths.cache, `backup-colecao-pokemon-${stamp}.json`);
-  if (f.exists) f.delete();
-  writeText(f, JSON.stringify(backup));
-  return f.uri;
+  return writeTempFile(`backup-colecao-pokemon-${stamp}.json`, JSON.stringify(backup));
 }
 
 export async function readBackupFile(uri: string): Promise<BackupFile> {
-  const text = await new File(uri).text();
+  const text = await readPickedFile(uri);
   const parsed = JSON.parse(text);
   if (parsed?.app !== 'pokecolecao' || !parsed?.data?.collections) {
     throw new Error('Este arquivo não é um backup do app.');

@@ -1,9 +1,13 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState } from 'react-native';
+import { cloudConfigured } from './sync/config';
+import { CloudError, lastSyncedAt, loadSession, signIn, signOut, syncNow } from './sync/cloud';
+import { deepEqual, merge3 } from './sync/merge';
 import type { StoredSet } from './api';
 import { allPossibleKeys, ownedKey } from './collection';
 import type { SetMode, SetPrefs } from './collection';
 import { deleteSetPrices } from './prices';
-import { AppData, CollectionEntry, deleteSet, loadData, PokedexCard, saveData, saveSet } from './storage';
+import { AppData, CollectionEntry, deleteSet, loadData, normalizeData, PokedexCard, saveData, saveSet } from './storage';
 import { DEFAULT_COUNTRY } from './countries';
 import { ApiVariantDetailed, variantKey } from './variants';
 
@@ -44,6 +48,19 @@ interface Store {
   toggleEra: (era: string) => void;
   patchCollection: (setId: string, fields: Partial<CollectionEntry>) => void;
   reload: () => void;
+  /** sincronização com a nuvem */
+  cloud: CloudState;
+  cloudSignIn: (email: string, password: string, create: boolean) => Promise<void>;
+  cloudSignOut: () => void;
+  cloudSyncNow: () => Promise<void>;
+}
+
+export interface CloudState {
+  configured: boolean;
+  email?: string;
+  syncing: boolean;
+  lastSync?: string;
+  error?: string;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -244,6 +261,83 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const reload = useCallback(() => setData(loadData()), []);
 
+  // ---------- nuvem ----------
+  const [cloud, setCloud] = useState<CloudState>(() => ({
+    configured: cloudConfigured(),
+    email: loadSession()?.user.email,
+    syncing: false,
+    lastSync: lastSyncedAt(),
+  }));
+  const dataRef = useRef(data);
+  dataRef.current = data;
+  const syncing = useRef(false);
+  const again = useRef(false);
+
+  const runSync = useCallback(async () => {
+    if (!cloudConfigured() || !loadSession()) return;
+    if (syncing.current) {
+      again.current = true;
+      return;
+    }
+    syncing.current = true;
+    setCloud((c) => ({ ...c, syncing: true }));
+    try {
+      do {
+        again.current = false;
+        const snapshot = dataRef.current;
+        const r = await syncNow(snapshot);
+        const merged = normalizeData(r.data);
+        // se mudou algo enquanto sincronizava, junta também
+        const current = dataRef.current;
+        const next = current === snapshot ? merged : normalizeData(merge3(snapshot, current, merged));
+        if (!deepEqual(next, current)) setData(next);
+        if (current !== snapshot) again.current = true;
+        setCloud((c) => ({ ...c, lastSync: r.syncedAt, error: undefined, email: loadSession()?.user.email }));
+      } while (again.current);
+    } catch (e) {
+      setCloud((c) => ({ ...c, error: e instanceof CloudError ? e.message : 'Sem conexão com a nuvem agora.', email: loadSession()?.user.email }));
+    } finally {
+      syncing.current = false;
+      setCloud((c) => ({ ...c, syncing: false }));
+    }
+  }, []);
+
+  // envia as alterações alguns segundos depois da última mudança
+  const firstSync = useRef(true);
+  useEffect(() => {
+    if (firstSync.current) {
+      firstSync.current = false;
+      return;
+    }
+    const t = setTimeout(runSync, 2500);
+    return () => clearTimeout(t);
+  }, [data, runSync]);
+
+  // ao abrir o app, ao voltar para ele e a cada 1 minuto: busca alterações de outros aparelhos
+  useEffect(() => {
+    runSync();
+    const sub = AppState.addEventListener('change', (st) => st === 'active' && runSync());
+    const iv = setInterval(runSync, 60000);
+    return () => {
+      sub.remove();
+      clearInterval(iv);
+    };
+  }, [runSync]);
+
+  const cloudSignIn = useCallback(
+    async (email: string, password: string, create: boolean) => {
+      const s = await signIn(email, password, create);
+      setCloud((c) => ({ ...c, email: s.user.email, error: undefined }));
+      await runSync();
+    },
+    [runSync],
+  );
+  const cloudSignOut = useCallback(() => {
+    signOut();
+    setCloud((c) => ({ ...c, email: undefined, lastSync: undefined, error: undefined }));
+  }, []);
+  const cloudSyncNow = useCallback(() => runSync(), [runSync]);
+
   const value = useMemo(
     () => ({
       data,
@@ -275,8 +369,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       toggleEra,
       patchCollection,
       reload,
+      cloud,
+      cloudSignIn,
+      cloudSignOut,
+      cloudSyncNow,
     }),
-    [data, isOwned, ownedCountry, setCountry, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, setCategoryFilter, setCardSort, prefsFor, setSetMode, includeVariant, excludeVariant, excludeVariants, restoreExcluded, setHomeSort, addPokedexCard, removePokedexCard, setPokedexFilters, defaultCountry, setDefaultCountry, setHomeView, toggleEra, patchCollection, reload],
+    [data, isOwned, ownedCountry, setCountry, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, setCategoryFilter, setCardSort, prefsFor, setSetMode, includeVariant, excludeVariant, excludeVariants, restoreExcluded, setHomeSort, addPokedexCard, removePokedexCard, setPokedexFilters, defaultCountry, setDefaultCountry, setHomeView, toggleEra, patchCollection, reload, cloud, cloudSignIn, cloudSignOut, cloudSyncNow],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

@@ -1,6 +1,8 @@
 import { Image } from 'expo-image';
 import React, { useEffect, useState } from 'react';
-import { Alert, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useAppDimensions } from '../dimensions';
+import { Alert } from '../alert';
 import { cardImage, StoredCard, StoredSet } from '../api';
 import { cardVariants, otherVariants, ownedKey } from '../collection';
 import type { SetPrefs } from '../collection';
@@ -29,7 +31,7 @@ const TYPES: { value: string; label: string }[] = [
 const FOILS = ['cosmos', 'pokeball', 'masterball', 'galaxy', 'cracked-ice', 'gold', 'rainbow', 'energy', 'team-rocket'];
 
 export function CardDetail({ set, prefs, card, onClose }: { set: StoredSet; prefs: SetPrefs; card: StoredCard | null; onClose: () => void }) {
-  const { width, height } = useWindowDimensions();
+  const { width, height } = useAppDimensions();
   const { ownedCountry, toggleOwned, setCountry, data, addCustomVariant, removeCustomVariant, includeVariant, excludeVariant } = useStore();
   const [pickingFor, setPickingFor] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
