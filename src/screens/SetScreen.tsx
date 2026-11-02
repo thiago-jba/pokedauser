@@ -554,7 +554,7 @@ export function SetScreen({ setId, onBack }: { setId: string; onBack: () => void
         </Pressable>
       </Modal>
 
-      <CardDetail set={set} prefs={prefs} card={detail} onClose={() => setDetail(null)} />
+      <CardDetail set={set} prefs={prefs} card={detail ? allCards(set, prefs).find((c) => c.id === detail.id) ?? detail : null} onClose={() => setDetail(null)} />
       <BusyModal visible={!!busy} title={busy?.title ?? ''} done={busy?.done} total={busy?.total} />
     </View>
   );

@@ -46,3 +46,15 @@ assert.equal(defaultMode({ id: 'sv08.5', nameEn: 'Prismatic Evolutions', isPromo
 assert.deepEqual(labels(5, { mode: 'especial' }), ['normal:Normal', 'reverse:Reverse', 'promo:Holo GameStop', 'promo:Holo Cosmos', 'promo:Normal Liga']);
 assert.deepEqual(labels(5, { mode: 'especial', excluded: [ownedKey(c107.id, 'holo||||gamestop')] }), ['normal:Normal', 'reverse:Reverse', 'promo:Holo Cosmos', 'promo:Normal Liga']);
 console.log('OK: modos principal/especial');
+
+// foto em português errada: sv01-013 usa a foto em inglês; usuário pode trocar outras
+import { allCards } from '../src/collection.ts';
+const sv01: any = { schema: 2, id: 'sv01', nameEn: 'Scarlet & Violet', isPromoSet: false, ignoredStamps: [], official: 198,
+  cards: [
+    { id: 'sv01-013', localId: '013', name: 'Sprigatito', image: 'https://assets.tcgdex.net/pt/sv/sv01/013', raw: [{ type: 'normal' }] },
+    { id: 'sv01-014', localId: '014', name: 'Floragato', image: 'https://assets.tcgdex.net/pt/sv/sv01/014', raw: [{ type: 'normal' }] },
+  ] };
+assert.equal(allCards(sv01)[0].image, 'https://assets.tcgdex.net/en/sv/sv01/013');
+assert.equal(allCards(sv01)[1].image, 'https://assets.tcgdex.net/pt/sv/sv01/014');
+assert.equal(allCards(sv01, { imageEn: ['sv01-014'] })[1].image, 'https://assets.tcgdex.net/en/sv/sv01/014');
+console.log('OK: foto em inglês quando a em português está errada');

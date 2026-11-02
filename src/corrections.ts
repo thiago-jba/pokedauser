@@ -21,6 +21,12 @@ const mewRgb = (letter: 'R' | 'G' | 'B'): StoredCard => ({
   raw: [{ type: 'holo' }],
 });
 
+/**
+ * Cartas cuja foto em português da TCGdex está errada: usam a foto em inglês.
+ * - sv01-013 (Sprigatito, SVI 013/198): a foto em português é a da promo SVP 001.
+ */
+export const ENGLISH_IMAGE = new Set<string>(['sv01-013']);
+
 /** Cartas que faltam, adicionadas ao final da coleção. Chave = ID da coleção. */
 export const EXTRA_CARDS: Record<string, StoredCard[]> = {
   // Celebração de 30 Anos — os 3 Mew RGB (sem numeração)

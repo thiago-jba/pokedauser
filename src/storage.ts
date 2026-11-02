@@ -38,7 +38,7 @@ export interface AppData {
   /** configurações do app */
   settings?: AppSettings;
   /** setId -> modo da coleção e variações incluídas/ocultadas pelo usuário */
-  prefs?: Record<string, { mode?: 'principal' | 'especial'; included?: string[]; excluded?: string[] }>;
+  prefs?: Record<string, { mode?: 'principal' | 'especial'; included?: string[]; excluded?: string[]; imageEn?: string[] }>;
   /** Pokédex: número do Pokémon -> cartas que tenho dele */
   pokedex?: Record<string, PokedexCard[]>;
   /** filtros salvos da tela da Pokédex */

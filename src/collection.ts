@@ -1,7 +1,7 @@
 // Junta as variantes da API, as correções do app e as adicionadas à mão,
 // e calcula os números de progresso.
 import type { StoredCard, StoredSet } from './api';
-import { EXTRA_CARDS, EXTRA_VARIANTS } from './corrections';
+import { ENGLISH_IMAGE, EXTRA_CARDS, EXTRA_VARIANTS } from './corrections';
 import { buildVariants, classifyDetailed } from './variants';
 import type { ApiVariantDetailed, CardVariant } from './variants';
 
@@ -27,7 +27,14 @@ export interface SetPrefs {
   included?: string[];
   /** variações que o usuário ocultou */
   excluded?: string[];
+  /** cartas em que o usuário escolheu a foto em inglês (a em português está errada) */
+  imageEn?: string[];
 }
+
+/** Troca a foto em português pela em inglês (mesmo endereço, outro idioma). */
+export const englishImage = (base?: string) => base?.replace('assets.tcgdex.net/pt/', 'assets.tcgdex.net/en/');
+export const usesEnglishImage = (cardId: string, prefs?: SetPrefs) =>
+  ENGLISH_IMAGE.has(cardId) || !!prefs?.imageEn?.includes(cardId);
 
 // Coleções especiais conhecidas (subconjuntos ".5", celebrações, coleções clássicas…)
 const SPECIAL_IDS = new Set(['30th', 'cel25', 'cel25c', 'swsh12.5', 'swsh4.5', 'swsh3.5', 'sv03.5', 'sv04.5', 'sv06.5', 'sv08.5', 'me02.5']);
@@ -91,7 +98,12 @@ export function otherVariants(set: StoredSet, card: StoredCard, prefs?: SetPrefs
 }
 
 /** Cartas da coleção: as da API mais as que o app sabe que faltam (no final da lista). */
-export function allCards(set: StoredSet): StoredCard[] {
+export function allCards(set: StoredSet, prefs?: SetPrefs): StoredCard[] {
+  const fixed = set.cards.map((c) => (c.image && usesEnglishImage(c.id, prefs) ? { ...c, image: englishImage(c.image) } : c));
+  return withExtras({ ...set, cards: fixed });
+}
+
+function withExtras(set: StoredSet): StoredCard[] {
   const extras = EXTRA_CARDS[set.id];
   if (!extras) return set.cards;
   const byId = new Map(extras.map((c) => [c.id, c]));
@@ -102,7 +114,7 @@ export function allCards(set: StoredSet): StoredCard[] {
 }
 
 export function setEntries(set: StoredSet, prefs?: SetPrefs): Entry[] {
-  return allCards(set).flatMap((card) =>
+  return allCards(set, prefs).flatMap((card) =>
     cardVariants(set, card, prefs).map((variant) => ({ key: ownedKey(card.id, variant.key), card, variant })),
   );
 }

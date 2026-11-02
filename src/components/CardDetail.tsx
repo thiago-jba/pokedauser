@@ -33,7 +33,7 @@ const FOILS = ['cosmos', 'pokeball', 'masterball', 'galaxy', 'cracked-ice', 'gol
 
 export function CardDetail({ set, prefs, card, onClose }: { set: StoredSet; prefs: SetPrefs; card: StoredCard | null; onClose: () => void }) {
   const { width, height } = useAppDimensions();
-  const { ownedCountry, toggleOwned, setCountry, data, addCustomVariant, removeCustomVariant, includeVariant, excludeVariant } = useStore();
+  const { ownedCountry, toggleOwned, setCountry, data, addCustomVariant, removeCustomVariant, includeVariant, excludeVariant, toggleEnglishImage } = useStore();
   const [pickingFor, setPickingFor] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [type, setType] = useState('holo');
@@ -96,6 +96,15 @@ export function CardDetail({ set, prefs, card, onClose }: { set: StoredSet; pref
                 contentFit="contain"
                 cachePolicy="disk"
               />
+            ) : null}
+            {card.image?.includes('assets.tcgdex.net/pt/') ? (
+              <Pressable onPress={() => toggleEnglishImage(set.id, card.id)} hitSlop={8} style={{ marginTop: 8 }}>
+                <Text style={styles.photoLink}>Foto errada? Usar a foto em inglês</Text>
+              </Pressable>
+            ) : prefs.imageEn?.includes(card.id) ? (
+              <Pressable onPress={() => toggleEnglishImage(set.id, card.id)} hitSlop={8} style={{ marginTop: 8 }}>
+                <Text style={styles.photoLink}>Voltar para a foto em português</Text>
+              </Pressable>
             ) : null}
             <Text style={styles.title}>{card.name}</Text>
             <Text style={styles.sub}>
@@ -329,6 +338,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
+  photoLink: { color: colors.textDim, fontSize: 12, fontWeight: '700', textDecorationLine: 'underline' },
   hide: { color: colors.textDim, fontSize: 12, fontWeight: '700' },
   othersHint: { color: colors.textFaint, fontSize: 11, alignSelf: 'flex-start', marginBottom: 4 },
   includeBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: colors.accentDim },

@@ -37,6 +37,8 @@ interface Store {
   excludeVariants: (setId: string, keys: string[]) => void;
   /** volta a mostrar todas as variações ocultas da coleção */
   restoreExcluded: (setId: string) => void;
+  /** liga/desliga a foto em inglês de uma carta (quando a em português está errada) */
+  toggleEnglishImage: (setId: string, cardId: string) => void;
   setHomeSort: (sort: string) => void;
   addPokedexCard: (dexId: number, card: Omit<PokedexCard, 'uid' | 'addedAt'>) => void;
   removePokedexCard: (dexId: number, uid: string) => void;
@@ -223,6 +225,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       }),
     [], // eslint-disable-line react-hooks/exhaustive-deps
   );
+  const toggleEnglishImage = useCallback(
+    (setId: string, cardId: string) =>
+      updPrefs(setId, (p) => {
+        const cur = new Set(p.imageEn ?? []);
+        cur.has(cardId) ? cur.delete(cardId) : cur.add(cardId);
+        return { ...p, imageEn: [...cur] };
+      }),
+    [], // eslint-disable-line react-hooks/exhaustive-deps
+  );
   const restoreExcluded = useCallback((setId: string) => updPrefs(setId, (p) => ({ ...p, excluded: [] })), []); // eslint-disable-line react-hooks/exhaustive-deps
   const setCardSort = useCallback((setId: string, sort: string) => {
     setData((d) => ({ ...d, filters: { ...d.filters, [setId]: { ...d.filters[setId], sort } } }));
@@ -359,6 +370,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       excludeVariant,
       excludeVariants,
       restoreExcluded,
+      toggleEnglishImage,
       setHomeSort,
       addPokedexCard,
       removePokedexCard,
@@ -374,7 +386,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       cloudSignOut,
       cloudSyncNow,
     }),
-    [data, isOwned, ownedCountry, setCountry, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, setCategoryFilter, setCardSort, prefsFor, setSetMode, includeVariant, excludeVariant, excludeVariants, restoreExcluded, setHomeSort, addPokedexCard, removePokedexCard, setPokedexFilters, defaultCountry, setDefaultCountry, setHomeView, toggleEra, patchCollection, reload, cloud, cloudSignIn, cloudSignOut, cloudSyncNow],
+    [data, isOwned, ownedCountry, setCountry, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, setCategoryFilter, setCardSort, prefsFor, setSetMode, includeVariant, excludeVariant, excludeVariants, restoreExcluded, toggleEnglishImage, setHomeSort, addPokedexCard, removePokedexCard, setPokedexFilters, defaultCountry, setDefaultCountry, setHomeView, toggleEra, patchCollection, reload, cloud, cloudSignIn, cloudSignOut, cloudSyncNow],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
