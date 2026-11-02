@@ -105,11 +105,11 @@ jobs:
           echo "::notice title=Endereço da versão web::${URL:-não encontrado no log}"
         continue-on-error: true
 
-      - name: Detalhes da versão web (se falhou)
-        if: failure() || always()
+      - name: Detalhes da versão web
+        if: always()
         run: |
-          if [ -f web.log ] && ! grep -qE 'https://[a-z0-9.-]+\.expo\.app' web.log; then
-            MSG=$(tail -45 web.log | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+          if [ -f web.log ]; then
+            MSG=$(grep -v '^\s*$' web.log | tail -40 | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
             echo "::warning title=Log da versão web::${MSG}"
           fi
 
