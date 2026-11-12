@@ -61,12 +61,16 @@ const abbrOf = new Map();
 const byAbbr = new Map();
 for (const g of groups) if (g.abbreviation) byAbbr.set(String(g.abbreviation).toUpperCase(), [...(byAbbr.get(String(g.abbreviation).toUpperCase()) ?? []), g]);
 
+// nomes que não batem por regra
+const ALIASES = { sm1: /^SM Base Set$/i, xy1: /^XY Base Set$/i, swsh1: /Sword & Shield Base Set/i, bw1: /^Black and White$/i };
+
 const pairs = [];
 for (const s of tcgdex) {
   const k = norm(s.name);
   const gs = new Set();
   // 1) mesma sigla; 2) mesmo nome; 3) nome do grupo = nome + "Base Set"; 4) nome do grupo termina com o nome
   for (const g of byAbbr.get(abbrOf.get(s.id)) ?? []) gs.add(g);
+  for (const g of groups) if (ALIASES[s.id]?.test(g.name)) gs.add(g);
   if (k.length >= 3) {
     for (const g of byNorm.get(k) ?? []) gs.add(g);
     for (const g of byNorm.get(`${k}baseset`) ?? []) gs.add(g);
@@ -79,7 +83,8 @@ for (const s of tcgdex) {
   for (const g of gs) pairs.push({ setId: s.id, setName: s.name, group: g });
 }
 
-const isPack = (n) => /booster pack/i.test(n) && !/box|bundle|display|case|blister|code card|set of|lot|tin|collection/i.test(n);
+// palavras inteiras (\b): "Destiny" não é "tin", "Legendary Collection" é nome de expansão
+const isPack = (n) => /booster pack/i.test(n) && !/\b(box|bundle|display|case|blister|code card|set of|lot|tin|art bundle)\b/i.test(n);
 
 const out = {};
 const diag = [];
