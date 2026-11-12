@@ -205,3 +205,33 @@ export function pokedexCardPrice(prices: SetPrices | null, cardId: string, varia
   if (variantKey && forCard[variantKey]) return forCard[variantKey];
   return variantKey ? undefined : forCard['normal'] ?? forCard['holo'] ?? Object.values(forCard)[0];
 }
+
+// ---------- preços das Coleções Especiais (cartas de várias expansões, todas as coleções juntas) ----------
+
+/** Identificador usado para guardar os preços e o histórico das Coleções Especiais. */
+export const SPECIALS_PRICES_ID = '__especiais';
+
+/**
+ * Atualiza os preços de uma lista de cartas avulsas quando passou 1 dia ou há carta nova sem preço.
+ * Devolve true se buscou preços novos (o retrato do dia entra no histórico da evolução).
+ */
+export async function refreshCardListPrices(id: string, cardIds: string[]): Promise<boolean> {
+  if (!cardIds.length) return false;
+  const cur = loadSetPrices(id);
+  const missing = cardIds.some((c) => !cur?.cards[c] && !cur?.names[c]);
+  if (!pricesAreStale(cur) && !missing) return false;
+  saveSetPrices(id, await fetchCardListPrices(cardIds));
+  return true;
+}
+
+/** Soma o valor (US$ no TCGplayer, € no Cardmarket) de cartas avulsas na versão escolhida. */
+export function cardListValue(prices: SetPrices | null, cards: { cardId: string; variantKey?: string }[]): { tcg: number; cm: number } {
+  let tcg = 0;
+  let cm = 0;
+  for (const c of cards) {
+    const p = pokedexCardPrice(prices, c.cardId, c.variantKey);
+    tcg += p?.tcg ?? 0;
+    cm += p?.cm ?? 0;
+  }
+  return { tcg, cm };
+}

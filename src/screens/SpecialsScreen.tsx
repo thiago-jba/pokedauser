@@ -7,6 +7,9 @@ import { AutoField } from '../components/AddPokedexCard';
 import { GlassShine } from '../components/Glass';
 import { TAB_BAR_SPACE } from '../components/TabBar';
 import { Segmented } from '../components/ui';
+import { ValueSummary } from '../components/ValueSummary';
+import { cardListValue, fmtMoney, loadSetPrices, SPECIALS_PRICES_ID } from '../prices';
+import { useSpecialPrices } from '../useSpecialPrices';
 import { artworkUrl, getSpecies, loadSpeciesCache } from '../pokedex';
 import type { Species } from '../pokedex';
 import { PRESETS, specialSubtitle } from '../specials';
@@ -39,6 +42,13 @@ export function SpecialsScreen({ openSpecial }: { openSpecial: (uid: string) => 
   const [creating, setCreating] = useState(false);
   const list = data.specials ?? [];
   const missingPresets = PRESETS.filter((p) => !list.some((c) => c.uid === p.uid));
+  const allCards = useMemo(() => list.flatMap((c) => c.cards), [list]);
+  const money = useSpecialPrices(allCards);
+  const prices = useMemo(() => loadSetPrices(SPECIALS_PRICES_ID), [money.version]); // eslint-disable-line react-hooks/exhaustive-deps
+  const colValue = (c: SpecialCollection) => {
+    const v = cardListValue(prices, c.cards);
+    return money.rates ? fmtMoney(v.tcg * money.rates.usd, 'R$') : fmtMoney(v.tcg, 'US$');
+  };
 
   const remove = (c: SpecialCollection) =>
     Alert.alert('Apagar coleção', `Apagar "${c.name}" e as ${c.cards.length} cartas registradas nela?`, [
@@ -61,6 +71,19 @@ export function SpecialsScreen({ openSpecial }: { openSpecial: (uid: string) => 
               <Text style={styles.newText}>+ Nova coleção especial</Text>
               <Text style={styles.newSub}>de um Pokémon, de Energias ou de qualquer nome</Text>
             </Pressable>
+            {allCards.length ? (
+              <ValueSummary
+                kicker="COLEÇÕES ESPECIAIS"
+                countLabel="Cartas nas coleções especiais"
+                count={allCards.length}
+                tcg={money.tcg}
+                cm={money.cm}
+                rates={money.rates}
+                baskets={money.baskets}
+                version={money.version}
+                hint="todas as coleções especiais"
+              />
+            ) : null}
             {missingPresets.length ? (
               <View style={{ marginBottom: 6 }}>
                 <Text style={styles.section}>Sugestões</Text>
@@ -97,6 +120,7 @@ export function SpecialsScreen({ openSpecial }: { openSpecial: (uid: string) => 
             <View style={styles.count}>
               <Text style={styles.countNum}>{item.cards.length}</Text>
               <Text style={styles.countLabel}>{item.cards.length === 1 ? 'carta' : 'cartas'}</Text>
+              {item.cards.length ? <Text style={styles.countValue}>{colValue(item)}</Text> : null}
             </View>
           </Pressable>
         )}
@@ -286,9 +310,10 @@ const styles = StyleSheet.create({
   },
   name: { color: colors.text, fontSize: 18, fontWeight: '900' },
   sub: { color: colors.textDim, fontSize: 12, marginTop: 2 },
-  count: { alignItems: 'center', minWidth: 54 },
+  count: { alignItems: 'center', minWidth: 70 },
   countNum: { color: colors.gold, fontSize: 22, fontWeight: '900' },
   countLabel: { color: colors.textFaint, fontSize: 11 },
+  countValue: { color: colors.textDim, fontSize: 11, fontWeight: '800', marginTop: 2 },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', padding: 12 },
   sheet: { backgroundColor: colors.sheet, borderRadius: 28, maxHeight: '92%', borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, overflow: 'hidden' },
   sheetTitle: { color: colors.text, fontSize: 20, fontWeight: '900' },

@@ -8,6 +8,8 @@ import { Flag } from '../components/Flag';
 import { GlassShine } from '../components/Glass';
 import { PokedexCardDetail } from '../components/PokedexCardDetail';
 import { IconButton } from '../components/ui';
+import { ValueSummary } from '../components/ValueSummary';
+import { useSpecialPrices } from '../useSpecialPrices';
 import { useAppDimensions } from '../dimensions';
 import { specialSubtitle } from '../specials';
 import type { SpecialCard } from '../storage';
@@ -27,6 +29,9 @@ export function SpecialScreen({ uid, onBack }: { uid: string; onBack: () => void
   const [countryFor, setCountryFor] = useState<SpecialCard | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [q, setQ] = useState('');
+
+  const colCards = useMemo(() => col?.cards ?? [], [col?.cards]);
+  const money = useSpecialPrices(colCards);
 
   // mais recentes primeiro
   const cards = useMemo(() => {
@@ -80,6 +85,19 @@ export function SpecialScreen({ uid, onBack }: { uid: string; onBack: () => void
                 </Text>
               </View>
             </View>
+            {total ? (
+              <ValueSummary
+                kicker="VALOR DA COLEÇÃO"
+                countLabel="Cartas"
+                count={total}
+                tcg={money.tcg}
+                cm={money.cm}
+                rates={money.rates}
+                baskets={money.baskets}
+                version={money.version}
+                hint="todas as cartas desta coleção"
+              />
+            ) : null}
             <Pressable style={styles.addBtn} onPress={() => setAdding(true)}>
               <Text style={styles.addText}>+ Adicionar carta</Text>
               <Text style={styles.addSub}>pela câmera ou escolhendo a expansão e a carta</Text>

@@ -12,6 +12,7 @@ import { GlassShine } from '../components/Glass';
 import { EvolutionPanel } from '../components/EvolutionPanel';
 import { SummaryCard } from '../components/SummaryCard';
 import { PokedexSummary } from '../components/PokedexSummary';
+import { ValueSummary } from '../components/ValueSummary';
 import { loadSpeciesCache } from '../pokedex';
 import { TAB_BAR_SPACE } from '../components/TabBar';
 import type { Basket } from '../evolution';
@@ -27,6 +28,9 @@ import {
   fetchCardListPrices,
   POKEDEX_PRICES_ID,
   pokedexCardPrice,
+  cardListValue,
+  refreshCardListPrices,
+  SPECIALS_PRICES_ID,
 } from '../prices';
 import type { Rates } from '../prices';
 import { eraPt, eraRank, HOME_SORTS, normalizeSort, sortLabel } from '../eras';
@@ -86,6 +90,14 @@ export function HomeScreen({ openSet, openSettings }: { openSet: (setId: string)
         try {
           saveSetPrices(POKEDEX_PRICES_ID, await fetchCardListPrices(dexCards.map((c) => c.cardId)));
           if (alive) setPricesVersion((v) => v + 1);
+        } catch {}
+      }
+      // Coleções Especiais: mesma regra
+      const spIds = (data.specials ?? []).flatMap((c) => c.cards.map((x) => x.cardId));
+      if (alive && spIds.length) {
+        setBgPrices('atualizando preços das Coleções Especiais…');
+        try {
+          if (await refreshCardListPrices(SPECIALS_PRICES_ID, spIds)) alive && setPricesVersion((v) => v + 1);
         } catch {}
       }
       if (alive) setBgPrices(null);
@@ -172,6 +184,17 @@ export function HomeScreen({ openSet, openSettings }: { openSet: (setId: string)
       baskets: [{ setId: POKEDEX_PRICES_ID, items: cards.map((c) => ({ cardId: c.cardId, variantKey: c.variantKey ?? 'normal' })) }] as Basket[],
     };
   }, [data.pokedex, pricesVersion]);
+
+  // Coleções Especiais: valor e evolução de todas as cartas
+  const spSummary = useMemo(() => {
+    const cards = (data.specials ?? []).flatMap((c) => c.cards);
+    return {
+      count: cards.length,
+      collections: (data.specials ?? []).length,
+      ...cardListValue(loadSetPrices(SPECIALS_PRICES_ID), cards),
+      baskets: [{ setId: SPECIALS_PRICES_ID, items: cards.map((c) => ({ cardId: c.cardId, variantKey: c.variantKey ?? 'normal' })) }] as Basket[],
+    };
+  }, [data.specials, pricesVersion]);
 
   // Resumo geral: soma de todas as coleções, cada uma com o seu último filtro
   const summary = useMemo(() => {
@@ -521,6 +544,19 @@ export function HomeScreen({ openSet, openSettings }: { openSet: (setId: string)
                 rates={rates}
                 baskets={dexSummary.baskets}
                 version={pricesVersion}
+              />
+            ) : null}
+            {spSummary.count > 0 ? (
+              <ValueSummary
+                kicker="COLEÇÕES ESPECIAIS"
+                countLabel={`Cartas em ${spSummary.collections} ${spSummary.collections === 1 ? 'coleção' : 'coleções'}`}
+                count={spSummary.count}
+                tcg={spSummary.tcg}
+                cm={spSummary.cm}
+                rates={rates}
+                baskets={spSummary.baskets}
+                version={pricesVersion}
+                hint="todas as coleções especiais"
               />
             ) : null}
             </View>
