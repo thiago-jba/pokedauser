@@ -154,6 +154,7 @@ export const BOOSTER_SORTS = [
   { value: 'nome_desc', label: 'Expansão: Z → A' },
   { value: 'qtd_desc', label: 'Mais boosters primeiro' },
   { value: 'qtd_asc', label: 'Menos boosters primeiro' },
+  { value: 'estampa', label: 'Mesma estampa, lado a lado por país' },
 ] as const;
 export type BoosterSort = (typeof BOOSTER_SORTS)[number]['value'];
 
@@ -192,6 +193,24 @@ export function groupBoosters<T extends { setId: string; setName: string; addedA
     nome_desc: (a, b) => name(b, a),
     qtd_desc: (a, b) => b.items.length - a.items.length || name(a, b),
     qtd_asc: (a, b) => a.items.length - b.items.length || name(a, b),
+    estampa: (a, b) => b.lastAdded.localeCompare(a.lastAdded),
   };
   return groups.sort(cmp[sort] ?? cmp.recentes);
+}
+
+const COUNTRY_FIRST = ['BR', 'US', 'JP'];
+const countryRank = (c: string) => {
+  const i = COUNTRY_FIRST.indexOf(c);
+  return i >= 0 ? String(i) : `9${c}`;
+};
+
+/** Boosters de uma expansão separados por estampa; dentro de cada estampa, um por país (BR, US, JP, depois A-Z). */
+export function byArt<T extends { file: string; country: string; addedAt: string }>(items: T[]): { file: string; items: T[] }[] {
+  const m = new Map<string, T[]>();
+  // estampas na ordem em que apareceram pela primeira vez
+  for (const b of [...items].sort((a, b) => a.addedAt.localeCompare(b.addedAt))) m.set(b.file, [...(m.get(b.file) ?? []), b]);
+  return [...m.entries()].map(([file, list]) => ({
+    file,
+    items: list.sort((a, b) => countryRank(a.country).localeCompare(countryRank(b.country)) || a.addedAt.localeCompare(b.addedAt)),
+  }));
 }

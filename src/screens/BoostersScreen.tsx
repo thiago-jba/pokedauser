@@ -3,7 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Alert } from '../alert';
-import { artTitle, BOOSTER_SORTS, groupBoosters } from '../boosters';
+import { artTitle, BOOSTER_SORTS, byArt, groupBoosters } from '../boosters';
 import type { BoosterSort } from '../boosters';
 import { AddBooster, BOOSTER_RATIO } from '../components/AddBooster';
 import { CountryPicker } from '../components/CountryPicker';
@@ -41,6 +41,21 @@ export function BoostersScreen() {
   const gap = 10;
   const tile = (width - 16 * 2 - 28 - gap * (cols - 1)) / cols;
   const current = detail ? list.find((b) => b.uid === detail.uid) ?? null : null;
+
+  // um booster: imagem com a bandeira; na visão por estampa, o nome do país embaixo
+  const renderTile = (b: BoosterEntry, showCountry: boolean) => (
+    <Pressable key={b.uid} style={{ width: tile }} onPress={() => setDetail(b)}>
+      <View style={[styles.frame, { height: tile * BOOSTER_RATIO }]}>
+        {b.image ? <Image source={{ uri: b.image }} style={StyleSheet.absoluteFill} contentFit="contain" cachePolicy="disk" /> : null}
+        <View style={styles.flag}>
+          <Flag code={b.country} size={14} />
+        </View>
+      </View>
+      <Text style={styles.artName} numberOfLines={2}>
+        {showCountry ? countryName(b.country) : artTitle(b)}
+      </Text>
+    </Pressable>
+  );
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + 8 }]}>
@@ -88,22 +103,19 @@ export function BoostersScreen() {
                 <Text style={styles.plusText}>+</Text>
               </Pressable>
             </View>
-            {collapsed.has(g.setId) ? null : (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap }}>
-              {g.items.map((b) => (
-                <Pressable key={b.uid} style={{ width: tile }} onPress={() => setDetail(b)}>
-                  <View style={[styles.frame, { height: tile * BOOSTER_RATIO }]}>
-                    {b.image ? <Image source={{ uri: b.image }} style={StyleSheet.absoluteFill} contentFit="contain" cachePolicy="disk" /> : null}
-                    <View style={styles.flag}>
-                      <Flag code={b.country} size={14} />
-                    </View>
+            {collapsed.has(g.setId) ? null : sort === 'estampa' ? (
+              <View style={{ gap: 14 }}>
+                {byArt(g.items).map((a) => (
+                  <View key={a.file}>
+                    <Text style={styles.artRowTitle} numberOfLines={1}>
+                      {`${artTitle(a.items[0])} · ${a.items.length} ${a.items.length === 1 ? 'booster' : 'boosters'}`}
+                    </Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap }}>{a.items.map((b) => renderTile(b, true))}</View>
                   </View>
-                  <Text style={styles.artName} numberOfLines={2}>
-                    {artTitle(b)}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
+                ))}
+              </View>
+            ) : (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap }}>{g.items.map((b) => renderTile(b, false))}</View>
             )}
           </View>
         ))}
@@ -236,6 +248,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   sortText: { color: colors.text, fontSize: 13, fontWeight: '700' },
+  artRowTitle: { color: colors.text, fontSize: 13, fontWeight: '800', marginBottom: 6 },
   sortTitle: { color: colors.text, fontSize: 18, fontWeight: '900', marginBottom: 8 },
   sortItem: { paddingVertical: 11 },
   sortItemText: { color: colors.text, fontSize: 15 },

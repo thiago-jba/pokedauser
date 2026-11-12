@@ -30,3 +30,15 @@ assert.equal(ids('nome_asc'), 'bcа'.replace('а', 'a'));
 assert.equal(ids('qtd_desc')[0], 'a');
 assert.equal(groupBoosters(list, 'recentes')[1].items[0].addedAt, '2026-11-02');
 console.log('OK: ordenação dos boosters');
+
+import { byArt } from '../src/boosters.ts';
+const arts = byArt([
+  { file: 'P', country: 'JP', addedAt: '3' },
+  { file: 'L', country: 'BR', addedAt: '2' },
+  { file: 'P', country: 'BR', addedAt: '1' },
+  { file: 'P', country: 'DE', addedAt: '4' },
+  { file: 'P', country: 'US', addedAt: '5' },
+]);
+assert.deepEqual(arts.map((a) => a.file), ['P', 'L']);
+assert.deepEqual(arts[0].items.map((b) => b.country), ['BR', 'US', 'JP', 'DE']);
+console.log('OK: boosters da mesma estampa lado a lado por país');
