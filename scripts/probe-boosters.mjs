@@ -1,18 +1,12 @@
-const UA = { 'user-agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Mobile Safari/537.36', accept: 'text/html,application/json' };
-const tests = [
-  ['pokellector', 'https://www.pokellector.com/Scarlet-Violet-Expansion/', /[^"' ]*(pack|booster)[^"' ]*\.(png|jpg|webp)/gi],
-  ['pokellector-sets', 'https://www.pokellector.com/sets', /[^"' ]*(pack|booster)[^"' ]*\.(png|jpg|webp)/gi],
-  ['pricecharting', 'https://www.pricecharting.com/console/pokemon-scarlet-&-violet', /[^"' <>]*booster[^"'<>]*/gi],
-  ['cardmarket', 'https://www.cardmarket.com/en/Pokemon/Products/Boosters/Scarlet-Violet-Booster', /[^"' ]*\.(png|jpg|webp)/gi],
-  ['tcgcsv-groups', 'https://tcgcsv.com/tcgplayer/3/groups', /"name":"Scarlet & Violet[^"]*"[^}]*/g],
-  ['tcgcsv-sv1-products', 'https://tcgcsv.com/tcgplayer/3/22873/products', /"name":"[^"]*(Booster|Pack)[^"]*"/g],
-];
-for (const [name, url, re] of tests) {
-  let line = `${name}: `;
-  try {
-    const r = await fetch(url, { headers: UA });
-    const t = await r.text();
-    line += `HTTP ${r.status}, ${t.length} chars, cf=${/Just a moment|cf-chl/i.test(t)} :: ${[...new Set(t.match(re) ?? [])].slice(0, 30).join(' , ')}`;
-  } catch (e) { line += 'ERRO ' + e; }
-  console.log(`::notice title=${name}::${line.replace(/%/g, '%25').slice(0, 4000)}`);
+const j = async (u) => (await fetch(u)).json();
+const groups = (await j('https://tcgcsv.com/tcgplayer/3/groups')).results;
+console.log(`::notice title=grupos::${groups.length} grupos; exemplo: ${JSON.stringify(groups[0])}`);
+const pick = (re) => groups.find((g) => re.test(g.name));
+for (const re of [/^SV01/, /151/, /Prismatic/, /^SWSH01|Sword & Shield$/, /Evolving Skies/, /^Base Set$/, /^ME01|Mega Evolution$/]) {
+  const g = pick(re);
+  if (!g) { console.log(`::notice title=${re}::grupo não achado`); continue; }
+  const r = await fetch(`https://tcgcsv.com/tcgplayer/3/${g.groupId}/products`);
+  const cors = r.headers.get('access-control-allow-origin');
+  const prods = (await r.json()).results.filter((p) => /booster|pack/i.test(p.name) && !/box|bundle|display|case|blister|code card/i.test(p.name));
+  console.log(`::notice title=${g.name} (${g.groupId}, ${g.abbreviation})::cors=${cors} :: ${prods.map((p) => `${p.name} => ${p.imageUrl}`).join(' ; ').slice(0, 3500)}`);
 }
