@@ -119,6 +119,33 @@ export async function fetchPokemonCards(dexId: number): Promise<PokemonCardBrief
   return out;
 }
 
+const toBrief = (c: any): PokemonCardBrief => {
+  const localId = String(c.localId);
+  return { id: c.id, localId, setId: String(c.id).slice(0, String(c.id).length - localId.length - 1), name: c.name, image: c.image };
+};
+const queryCache = new Map<string, PokemonCardBrief[]>();
+
+/** Cartas cujo nome contém o termo (ex.: "Pikachu" acha "Pikachu ex", "Ash's Pikachu"…). */
+export async function fetchCardsByName(term: string): Promise<PokemonCardBrief[]> {
+  const k = `nome:${term.toLowerCase()}`;
+  const hit = queryCache.get(k);
+  if (hit) return hit;
+  const r = await fetch(`${TCG}/cards?name=${encodeURIComponent(term)}`);
+  const out = (r.ok ? ((await r.json()) as any[]) : []).map(toBrief);
+  queryCache.set(k, out);
+  return out;
+}
+
+/** Todas as cartas de Energia (básicas e especiais). */
+export async function fetchEnergyCards(): Promise<PokemonCardBrief[]> {
+  const hit = queryCache.get('energia');
+  if (hit) return hit;
+  const r = await fetch(`${TCG}/cards?category=Energy`);
+  const out = (r.ok ? ((await r.json()) as any[]) : []).map(toBrief);
+  queryCache.set('energia', out);
+  return out;
+}
+
 const setCardsCache = new Map<string, PokemonCardBrief[]>();
 
 /** Todas as cartas de uma coleção (para o campo "Carta" depois de escolher a coleção). */
@@ -212,6 +239,8 @@ export function matchesCardNumber(localId: string, typed: string): boolean {
 export async function identifyCard(
   read: FooterRead,
   setInfo: (setId: string) => { official?: number; code?: string } | undefined,
+  /** true: aceita também cartas que não são de Pokémon (Energias, Treinador) */
+  anyCard = false,
 ): Promise<{ card: PokemonCardBrief; dexIds: number[] }[]> {
   if (read.number === undefined && !read.promo) return [];
   const ids = read.promo
@@ -237,6 +266,7 @@ export async function identifyCard(
     try {
       const d = await (await fetch(`${TCG}/cards/${encodeURIComponent(card.id)}`)).json();
       if (Array.isArray(d?.dexId) && d.dexId.length) out.push({ card, dexIds: d.dexId });
+      else if (anyCard) out.push({ card, dexIds: [] });
     } catch {}
   }
   return out;

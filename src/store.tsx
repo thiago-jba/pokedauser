@@ -8,6 +8,7 @@ import { allPossibleKeys, ownedKey } from './collection';
 import type { SetMode, SetPrefs } from './collection';
 import { deleteSetPrices } from './prices';
 import { AppData, CollectionEntry, deleteSet, loadData, normalizeData, PokedexCard, saveData, saveSet } from './storage';
+import type { SpecialCard, SpecialCollection } from './storage';
 import { DEFAULT_COUNTRY } from './countries';
 import { ApiVariantDetailed, variantKey } from './variants';
 
@@ -43,6 +44,13 @@ interface Store {
   addPokedexCard: (dexId: number, card: Omit<PokedexCard, 'uid' | 'addedAt'>) => void;
   removePokedexCard: (dexId: number, uid: string) => void;
   setPokedexFilters: (f: { categories?: string[]; rarities?: string[] }) => void;
+  /** Coleções Especiais */
+  addSpecial: (col: Omit<SpecialCollection, 'createdAt' | 'cards'>) => void;
+  removeSpecial: (uid: string) => void;
+  renameSpecial: (uid: string, name: string) => void;
+  addSpecialCard: (uid: string, card: Omit<SpecialCard, 'uid' | 'addedAt'>) => void;
+  removeSpecialCard: (uid: string, cardUid: string) => void;
+  setSpecialCardCountry: (uid: string, cardUid: string, country: string) => void;
   /** país padrão ao marcar uma carta (Configurações) */
   defaultCountry: string;
   setDefaultCountry: (code: string) => void;
@@ -249,6 +257,34 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     (f: { categories?: string[]; rarities?: string[] }) => setData((d) => ({ ...d, pokedexFilters: { ...d.pokedexFilters, ...f } })),
     [],
   );
+  const updSpecial = (uid: string, f: (c: SpecialCollection) => SpecialCollection) =>
+    setData((d) => ({ ...d, specials: (d.specials ?? []).map((c) => (c.uid === uid ? f(c) : c)) }));
+  const addSpecial = useCallback((col: Omit<SpecialCollection, 'createdAt' | 'cards'>) => {
+    setData((d) =>
+      (d.specials ?? []).some((c) => c.uid === col.uid)
+        ? d
+        : { ...d, specials: [...(d.specials ?? []), { ...col, createdAt: new Date().toISOString(), cards: [] }] },
+    );
+  }, []);
+  const removeSpecial = useCallback((uid: string) => setData((d) => ({ ...d, specials: (d.specials ?? []).filter((c) => c.uid !== uid) })), []);
+  const renameSpecial = useCallback((uid: string, name: string) => updSpecial(uid, (c) => ({ ...c, name })), []); // eslint-disable-line react-hooks/exhaustive-deps
+  const addSpecialCard = useCallback(
+    (uid: string, card: Omit<SpecialCard, 'uid' | 'addedAt'>) =>
+      updSpecial(uid, (c) => ({
+        ...c,
+        cards: [...c.cards, { ...card, uid: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, addedAt: new Date().toISOString() }],
+      })),
+    [], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const removeSpecialCard = useCallback(
+    (uid: string, cardUid: string) => updSpecial(uid, (c) => ({ ...c, cards: c.cards.filter((x) => x.uid !== cardUid) })),
+    [], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const setSpecialCardCountry = useCallback(
+    (uid: string, cardUid: string, country: string) =>
+      updSpecial(uid, (c) => ({ ...c, cards: c.cards.map((x) => (x.uid === cardUid ? { ...x, country } : x)) })),
+    [], // eslint-disable-line react-hooks/exhaustive-deps
+  );
   const setHomeSort = useCallback((homeSort: string) => setData((d) => ({ ...d, homeSort })), []);
   const defaultCountry = data.settings?.defaultCountry ?? DEFAULT_COUNTRY;
   const setDefaultCountry = useCallback(
@@ -375,6 +411,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       addPokedexCard,
       removePokedexCard,
       setPokedexFilters,
+      addSpecial,
+      removeSpecial,
+      renameSpecial,
+      addSpecialCard,
+      removeSpecialCard,
+      setSpecialCardCountry,
       defaultCountry,
       setDefaultCountry,
       setHomeView,
@@ -386,7 +428,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       cloudSignOut,
       cloudSyncNow,
     }),
-    [data, isOwned, ownedCountry, setCountry, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, setCategoryFilter, setCardSort, prefsFor, setSetMode, includeVariant, excludeVariant, excludeVariants, restoreExcluded, toggleEnglishImage, setHomeSort, addPokedexCard, removePokedexCard, setPokedexFilters, defaultCountry, setDefaultCountry, setHomeView, toggleEra, patchCollection, reload, cloud, cloudSignIn, cloudSignOut, cloudSyncNow],
+    [data, isOwned, ownedCountry, setCountry, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, setCategoryFilter, setCardSort, prefsFor, setSetMode, includeVariant, excludeVariant, excludeVariants, restoreExcluded, toggleEnglishImage, setHomeSort, addPokedexCard, removePokedexCard, setPokedexFilters, addSpecial, removeSpecial, renameSpecial, addSpecialCard, removeSpecialCard, setSpecialCardCountry, defaultCountry, setDefaultCountry, setHomeView, toggleEra, patchCollection, reload, cloud, cloudSignIn, cloudSignOut, cloudSyncNow],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

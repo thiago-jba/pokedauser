@@ -12,14 +12,14 @@ import { CardScanner } from './CardScanner';
 import { ocrAvailable } from '../ocr';
 import { Chip } from './ui';
 
-interface Suggestion {
+export interface Suggestion {
   key: string;
   title: string;
   subtitle?: string;
 }
 
 /** Campo com sugestões que aparecem enquanto você digita. */
-function AutoField({
+export function AutoField({
   label,
   placeholder,
   text,

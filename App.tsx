@@ -13,6 +13,8 @@ import { SettingsScreen } from './src/screens/SettingsScreen';
 import { PokedexScreen } from './src/screens/PokedexScreen';
 import { PokemonScreen } from './src/screens/PokemonScreen';
 import { TabBar } from './src/components/TabBar';
+import { SpecialsScreen } from './src/screens/SpecialsScreen';
+import { SpecialScreen } from './src/screens/SpecialScreen';
 import type { PokemonCardBrief } from './src/pokedex';
 import { StoreProvider } from './src/store';
 import { colors } from './src/theme';
@@ -22,7 +24,9 @@ type Route =
   | { name: 'set'; setId: string }
   | { name: 'settings' }
   | { name: 'pokedex' }
-  | { name: 'pokemon'; dexId: number; prefill?: PokemonCardBrief };
+  | { name: 'pokemon'; dexId: number; prefill?: PokemonCardBrief }
+  | { name: 'especiais' }
+  | { name: 'especial'; uid: string };
 
 export default function App() {
   const [route, setRoute] = useState<Route>({ name: 'home' });
@@ -37,6 +41,10 @@ export default function App() {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       if (route.name === 'pokemon') {
         setRoute({ name: 'pokedex' });
+        return true;
+      }
+      if (route.name === 'especial') {
+        setRoute({ name: 'especiais' });
         return true;
       }
       if (route.name !== 'home') {
@@ -75,6 +83,10 @@ export default function App() {
               <SettingsScreen onBack={() => setRoute({ name: 'home' })} />
             ) : route.name === 'pokedex' ? (
               <PokedexScreen openPokemon={(dexId, prefill) => setRoute({ name: 'pokemon', dexId, prefill })} />
+            ) : route.name === 'especiais' ? (
+              <SpecialsScreen openSpecial={(uid) => setRoute({ name: 'especial', uid })} />
+            ) : route.name === 'especial' ? (
+              <SpecialScreen key={route.uid} uid={route.uid} onBack={() => setRoute({ name: 'especiais' })} />
             ) : route.name === 'pokemon' ? (
               <PokemonScreen
                 key={`${route.dexId}-${route.prefill?.id ?? ''}`}
@@ -86,10 +98,10 @@ export default function App() {
               <SetScreen key={route.setId} setId={route.setId} onBack={() => setRoute({ name: 'home' })} />
             )}
           </ErrorBoundary>
-          {route.name === 'home' || route.name === 'pokedex' ? (
+          {route.name === 'home' || route.name === 'pokedex' || route.name === 'especiais' ? (
             <TabBar
-              tab={route.name === 'home' ? 'colecao' : 'pokedex'}
-              onChange={(t) => setRoute(t === 'colecao' ? { name: 'home' } : { name: 'pokedex' })}
+              tab={route.name === 'home' ? 'colecao' : route.name}
+              onChange={(t) => setRoute(t === 'colecao' ? { name: 'home' } : t === 'pokedex' ? { name: 'pokedex' } : { name: 'especiais' })}
             />
           ) : null}
           <UpdateBanner />

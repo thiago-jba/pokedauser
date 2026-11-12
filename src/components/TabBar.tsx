@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../theme';
 import { GlassShine } from './Glass';
 
-export type Tab = 'colecao' | 'pokedex';
+export type Tab = 'colecao' | 'pokedex' | 'especiais';
 
 /** Altura ocupada pelo rodapé (para as listas não ficarem escondidas atrás dele). */
 export const TAB_BAR_SPACE = 92;
@@ -12,9 +12,10 @@ export const TAB_BAR_SPACE = 92;
 const TABS: { value: Tab; label: string; icon: string }[] = [
   { value: 'colecao', label: 'Minha Coleção', icon: '▦' },
   { value: 'pokedex', label: 'Pokédex', icon: '◉' },
+  { value: 'especiais', label: 'Coleções Especiais', icon: '★' },
 ];
 
-/** Rodapé flutuante de vidro com as duas áreas do app. */
+/** Rodapé flutuante de vidro com as áreas do app (ícone em cima, nome embaixo, para caberem as três). */
 export function TabBar({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
   const insets = useSafeAreaInsets();
   return (
@@ -32,7 +33,7 @@ export function TabBar({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void
               accessibilityState={{ selected: on }}
             >
               <Text style={[styles.icon, on && { color: colors.accent }]}>{t.icon}</Text>
-              <Text style={[styles.label, on && { color: colors.text }]}>{t.label}</Text>
+              <Text style={[styles.label, on && { color: colors.text }]} numberOfLines={1}>{t.label}</Text>
             </Pressable>
           );
         })}
@@ -54,8 +55,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     elevation: 12,
   },
-  item: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 18, paddingVertical: 11, borderRadius: 999 },
+  item: { alignItems: 'center', gap: 1, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, minWidth: 86 },
   itemOn: { backgroundColor: 'rgba(255,255,255,0.14)' },
-  icon: { color: colors.textFaint, fontSize: 16 },
-  label: { color: colors.textDim, fontSize: 14, fontWeight: '800' },
+  icon: { color: colors.textFaint, fontSize: 15 },
+  label: { color: colors.textDim, fontSize: 11, fontWeight: '800' },
 });

@@ -43,6 +43,27 @@ export interface AppData {
   pokedex?: Record<string, PokedexCard[]>;
   /** filtros salvos da tela da Pokédex */
   pokedexFilters?: { categories?: string[]; rarities?: string[] };
+  /** Coleções Especiais (Pikachu's, Energias…) — separadas das expansões e da Pokédex */
+  specials?: SpecialCollection[];
+}
+
+export type SpecialKind = 'pokemon' | 'energia' | 'nome';
+
+export interface SpecialCollection {
+  uid: string;
+  name: string;
+  /** pokemon: cartas do Pokémon (número da Pokédex + nome); energia: cartas de Energia; nome: qualquer carta com o termo no nome */
+  kind: SpecialKind;
+  dexId?: number;
+  /** nome procurado nas cartas (ex.: "Pikachu") */
+  term?: string;
+  createdAt: string;
+  cards: SpecialCard[];
+}
+
+export interface SpecialCard extends PokedexCard {
+  /** país da carta (código ISO, ex.: "BR") */
+  country: string;
 }
 
 export interface PokedexCard {
@@ -100,6 +121,7 @@ export function normalizeData(d: any): AppData {
     prefs: d.prefs ?? {},
     pokedex: d.pokedex ?? {},
     pokedexFilters: d.pokedexFilters ?? {},
+    specials: (d.specials ?? []).map((c: any) => ({ ...c, cards: c.cards ?? [] })),
   };
 }
 
@@ -221,5 +243,6 @@ export function restoreBackup(b: BackupFile) {
     prefs: b.data.prefs ?? {},
     pokedex: b.data.pokedex ?? {},
     pokedexFilters: b.data.pokedexFilters ?? {},
+    specials: b.data.specials ?? [],
   });
 }
