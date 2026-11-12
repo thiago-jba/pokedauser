@@ -9,6 +9,9 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  # todo dia: atualiza os preços dos boosters e republica a versão web (sem atualização do app nem APK)
+  schedule:
+    - cron: '23 10 * * *'
 
 permissions:
   contents: write
@@ -33,6 +36,7 @@ jobs:
         run: |
           APK=false
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then APK=true; fi
+          if [ "${{ github.event_name }}" = "schedule" ]; then echo "apk=false" >> "$GITHUB_OUTPUT"; echo "Execução diária: sem APK"; exit 0; fi
           if git rev-parse HEAD~1 >/dev/null 2>&1; then
             CHANGED=$(git diff --name-only HEAD~1 HEAD)
           else
@@ -88,12 +92,16 @@ jobs:
             j.expo.updates.enabled=false;fs.writeFileSync('app.json', JSON.stringify(j,null,2));"
 
       - name: Publicar atualização automática
-        if: env.EXPO_TOKEN != ''
+        if: env.EXPO_TOKEN != '' && github.event_name != 'schedule'
         run: |
           MSG=$(git log -1 --pretty=%s | cut -c1-200)
           npx --yes eas-cli@latest update --channel production --platform android --environment production --message "$MSG" --non-interactive
 
       # ---------- versão para navegador (computador) ----------
+
+      - name: Preços dos boosters (TCGplayer)
+        run: node scripts/booster-prices.mjs
+        continue-on-error: true
 
       - name: Publicar versão web
         if: env.EXPO_TOKEN != ''

@@ -21,7 +21,20 @@ type Range = (typeof RANGES)[number]['value'];
  * Quanto as cartas que eu tenho (com os filtros de cada coleção) valorizaram ou desvalorizaram no período.
  * Usa o histórico diário de preços guardado no celular.
  */
-export function EvolutionPanel({ baskets, rates, version }: { baskets: Basket[]; rates: Rates | null; version: number }) {
+export function EvolutionPanel({
+  baskets,
+  rates,
+  version,
+  tcgOnly,
+  itemWord = 'cartas',
+}: {
+  baskets: Basket[];
+  rates: Rates | null;
+  version: number;
+  /** só há preço do TCGplayer (ex.: boosters): esconde a escolha da loja */
+  tcgOnly?: boolean;
+  itemWord?: string;
+}) {
   const [range, setRange] = useState<Range>('30');
   const [source, setSource] = useState<Source>('tcg');
 
@@ -43,6 +56,7 @@ export function EvolutionPanel({ baskets, rates, version }: { baskets: Basket[];
     <View style={styles.wrap}>
       <View style={styles.header}>
         <Text style={styles.title}>Evolução do valor</Text>
+        {tcgOnly ? <Text style={styles.sub}>TCGplayer</Text> : (
         <Segmented<Source>
           style={{ width: 170 }}
           value={source}
@@ -52,6 +66,7 @@ export function EvolutionPanel({ baskets, rates, version }: { baskets: Basket[];
             { value: 'cm', label: 'Cardmarket' },
           ]}
         />
+        )}
       </View>
 
       <Segmented<Range> value={range} onChange={setRange} options={RANGES.map((r) => ({ value: r.value, label: r.label }))} />
@@ -67,7 +82,7 @@ export function EvolutionPanel({ baskets, rates, version }: { baskets: Basket[];
               <Text style={[styles.pillText, { color: tone }]}>{pctTxt}</Text>
             </View>
           </View>
-          <Text style={styles.sub}>{`${toBrl(evo.start)} → ${toBrl(evo.end)} · ${evo.itemsCounted} cartas com preço`}</Text>
+          <Text style={styles.sub}>{`${toBrl(evo.start)} → ${toBrl(evo.end)} · ${evo.itemsCounted} ${itemWord} com preço`}</Text>
           <View style={{ marginTop: 10 }}>
             <LineChart points={evo.points} color={up ? colors.success : down ? colors.accent : colors.gold} formatDate={(d) => formatDateBr(d).slice(0, 5)} />
           </View>
@@ -78,7 +93,7 @@ export function EvolutionPanel({ baskets, rates, version }: { baskets: Basket[];
       ) : (
         <Text style={styles.empty}>
           {evo.points.length === 1
-            ? `O app começou a guardar os preços em ${formatDateBr(evo.startDate)}. A partir de amanhã o gráfico mostra quanto suas cartas subiram ou caíram.`
+            ? `O app começou a guardar os preços em ${formatDateBr(evo.startDate)}. A partir de amanhã o gráfico mostra quanto suas ${itemWord} subiram ou caíram.`
             : 'Os preços ainda não foram baixados. Abra uma coleção ou use ⋮ → Atualizar preços para começar o histórico.'}
         </Text>
       )}

@@ -20,17 +20,20 @@ export function ValueSummary({
   version,
   hint,
   extra,
+  itemWord,
 }: {
   kicker: string;
   countLabel: string;
   count: number;
   tcg: number;
-  cm: number;
+  /** sem valor = não há preço do Cardmarket (a linha não aparece) */
+  cm?: number;
   rates: Rates | null;
   baskets: Basket[];
   version: number;
   hint: string;
   extra?: React.ReactNode;
+  itemWord?: string;
 }) {
   return (
     <View style={styles.card}>
@@ -39,10 +42,12 @@ export function ValueSummary({
       <View style={styles.rows}>
         <Row label={countLabel} value={fmtInt(count)} />
         <Row label="Valor (TCGplayer)" value={rates ? fmtMoney(tcg * rates.usd, 'R$') : fmtMoney(tcg, 'US$')} hint={`${fmtMoney(tcg, 'US$')} · ${hint}`} />
-        <Row label="Valor (Cardmarket)" value={rates ? fmtMoney(cm * rates.eur, 'R$') : fmtMoney(cm, '€')} hint={`${fmtMoney(cm, '€')} · ${hint}`} />
+        {cm === undefined ? null : (
+          <Row label="Valor (Cardmarket)" value={rates ? fmtMoney(cm * rates.eur, 'R$') : fmtMoney(cm, '€')} hint={`${fmtMoney(cm, '€')} · ${hint}`} />
+        )}
       </View>
       {extra}
-      <EvolutionPanel baskets={baskets} rates={rates} version={version} />
+      <EvolutionPanel baskets={baskets} rates={rates} version={version} tcgOnly={cm === undefined} itemWord={itemWord} />
     </View>
   );
 }

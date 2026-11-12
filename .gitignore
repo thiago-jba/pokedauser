@@ -4,3 +4,4 @@ android/
 ios/
 dist/
 *.log
+public/boosters-precos.json

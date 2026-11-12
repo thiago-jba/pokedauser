@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Alert } from '../alert';
@@ -11,6 +11,10 @@ import { Flag } from '../components/Flag';
 import { GlassShine } from '../components/Glass';
 import { SetLogo } from '../components/SetLogo';
 import { loadSetsCacheAnyAge } from '../storage';
+import { ValueSummary } from '../components/ValueSummary';
+import { boosterBasket, boosterPrice, refreshBoosterPrices } from '../boosterPrices';
+import { cachedRates, fmtMoney, getRates } from '../prices';
+import type { Rates } from '../prices';
 import { TAB_BAR_SPACE } from '../components/TabBar';
 import { countryName } from '../countries';
 import { useAppDimensions } from '../dimensions';
@@ -30,6 +34,33 @@ export function BoostersScreen() {
   const [detail, setDetail] = useState<BoosterEntry | null>(null);
   const [picking, setPicking] = useState(false);
   const list = data.boosters ?? [];
+
+  // preços (TCGplayer, 1x por dia) e cotação do dólar
+  const [priceVersion, setPriceVersion] = useState(0);
+  const [rates, setRates] = useState<Rates | null>(() => cachedRates());
+  useEffect(() => {
+    let alive = true;
+    getRates().then((r) => alive && r && setRates(r));
+    refreshBoosterPrices()
+      .then((changed) => alive && changed && setPriceVersion((v) => v + 1))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const money = (usd: number) => (rates ? fmtMoney(usd * rates.usd, 'R$') : fmtMoney(usd, 'US$'));
+  const value = useMemo(() => {
+    let usd = 0;
+    let priced = 0;
+    for (const b of list) {
+      const p = boosterPrice(b.setId);
+      if (p) {
+        usd += p;
+        priced++;
+      }
+    }
+    return { usd, priced, baskets: boosterBasket(list) };
+  }, [list, priceVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // expansões na ordenação escolhida (data de lançamento: a salva no booster ou a da expansão em "Coleção")
   const groups = useMemo(
@@ -73,6 +104,19 @@ export function BoostersScreen() {
             <Stat value={countries} label={countries === 1 ? 'país' : 'países'} />
           </View>
         ) : null}
+        {list.length ? (
+          <ValueSummary
+            kicker="VALOR DOS BOOSTERS"
+            countLabel={value.priced < list.length ? `Boosters (${value.priced} com preço)` : 'Boosters'}
+            count={list.length}
+            tcg={value.usd}
+            rates={rates}
+            baskets={value.baskets}
+            version={priceVersion}
+            hint="preço do booster de cada expansão"
+            itemWord="boosters"
+          />
+        ) : null}
         <Pressable style={styles.addBtn} onPress={() => setAdding({})}>
           <Text style={styles.addText}>+ Adicionar booster</Text>
           <Text style={styles.addSub}>escolha a expansão e a estampa do pacote</Text>
@@ -102,7 +146,10 @@ export function BoostersScreen() {
                 <Text style={styles.groupName} numberOfLines={2}>
                   {g.setName}
                 </Text>
-                <Text style={styles.groupCount}>{g.items.length}</Text>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={styles.groupCount}>{g.items.length}</Text>
+                  {boosterPrice(g.setId) ? <Text style={styles.groupValue}>{money(boosterPrice(g.setId)! * g.items.length)}</Text> : null}
+                </View>
               </Pressable>
               <Pressable onPress={() => setAdding({ setId: g.setId })} hitSlop={8} style={styles.plus}>
                 <Text style={styles.plusText}>+</Text>
@@ -158,6 +205,11 @@ export function BoostersScreen() {
               ) : null}
               <Text style={styles.detailTitle}>{artTitle(current)}</Text>
               <Text style={styles.detailSub}>{current.setName}</Text>
+              <Text style={styles.detailPrice}>
+                {boosterPrice(current.setId)
+                  ? `Booster desta expansão: ${money(boosterPrice(current.setId)!)} (TCGplayer, preço de mercado)`
+                  : 'Sem preço do TCGplayer para o booster desta expansão.'}
+              </Text>
               <Pressable style={styles.countryBtn} onPress={() => setPicking(true)}>
                 <Flag code={current.country} size={20} />
                 <Text style={styles.countryText}>{countryName(current.country)}</Text>
@@ -259,6 +311,8 @@ const styles = StyleSheet.create({
   sortItem: { paddingVertical: 11 },
   sortItemText: { color: colors.text, fontSize: 15 },
   groupCount: { color: colors.gold, fontWeight: '900' },
+  groupValue: { color: colors.textDim, fontSize: 11, fontWeight: '700' },
+  detailPrice: { color: colors.textDim, textAlign: 'center', fontSize: 12, marginTop: -6, marginBottom: 12 },
   plus: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.surface2, alignItems: 'center', justifyContent: 'center' },
   plusText: { color: colors.text, fontSize: 18, fontWeight: '900', marginTop: -2 },
   frame: { borderRadius: 8, overflow: 'hidden', backgroundColor: 'rgba(0,0,0,0.15)' },
