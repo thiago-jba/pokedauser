@@ -87,3 +87,16 @@ export function merge3(base: unknown, local: unknown, remote: unknown): unknown 
   if (Array.isArray(local) && Array.isArray(remote)) return mergeArray(Array.isArray(base) ? base : undefined, local, remote);
   return local;
 }
+
+/**
+ * Versão antiga do app (aberta antes de baixar a atualização, ou uma aba antiga do navegador) não conhece
+ * as partes novas da coleção (ex.: Coleções Especiais, Boosters) e envia a coleção SEM elas.
+ * A falta de uma parte inteira na nuvem não é exclusão: o app novo sempre grava todas as partes
+ * (mesmo vazias). Então a parte que sumiu da nuvem volta a ser a da última sincronização.
+ */
+export function protectMissingParts(base: unknown, remote: unknown): unknown {
+  if (!isObj(base) || !isObj(remote)) return remote;
+  const out: Record<string, unknown> = { ...remote };
+  for (const k of Object.keys(base)) if (!(k in remote)) out[k] = base[k];
+  return out;
+}

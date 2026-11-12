@@ -3,7 +3,7 @@
 // Cada aparelho guarda a última versão sincronizada ("base") para conseguir juntar alterações.
 import { kvDelete, kvReadJson, kvWriteJson } from '../kv';
 import { SUPABASE_KEY, SUPABASE_URL } from './config';
-import { deepEqual, merge3 } from './merge';
+import { deepEqual, merge3, protectMissingParts } from './merge';
 
 const SESSION = 'nuvem_sessao.json';
 const BASE = 'nuvem_base.json';
@@ -160,7 +160,7 @@ export async function syncNow<T>(local: T): Promise<{ data: T; syncedAt: string 
       continue;
     }
     // a nuvem tem alterações de outro aparelho
-    const merged = merge3(base?.data, local, remote.data) as T;
+    const merged = merge3(base?.data, local, protectMissingParts(base?.data, remote.data)) as T;
     if (deepEqual(merged, remote.data)) return done(remote.version, merged);
     if (await push(s, merged, remote.version)) return done(remote.version + 1, merged);
   }

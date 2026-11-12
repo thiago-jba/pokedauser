@@ -132,6 +132,8 @@ export function loadData(): AppData {
 export function normalizeData(d: any): AppData {
   if (!d || !Array.isArray(d.collections)) return emptyData();
   return {
+    // partes que esta versão não conhece (criadas por uma versão mais nova) são mantidas como estão
+    ...d,
     version: 1,
     collections: d.collections,
     owned: migrateOwned(d.owned),
