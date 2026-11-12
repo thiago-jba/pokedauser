@@ -47,6 +47,9 @@ export interface AppData {
   specials?: SpecialCollection[];
   /** Boosters (pacotes) que tenho: um item por pacote */
   boosters?: BoosterEntry[];
+  /** ordenação e expansões recolhidas na aba Boosters */
+  boostersSort?: string;
+  boostersCollapsed?: string[];
 }
 
 export interface BoosterEntry {
@@ -61,6 +64,8 @@ export interface BoosterEntry {
   /** país do booster (código ISO, ex.: "BR") */
   country: string;
   addedAt: string;
+  /** lançamento da expansão (AAAA-MM-DD), para ordenar */
+  releaseDate?: string;
 }
 
 export type SpecialKind = 'pokemon' | 'energia' | 'nome';
@@ -139,6 +144,8 @@ export function normalizeData(d: any): AppData {
     pokedexFilters: d.pokedexFilters ?? {},
     specials: (d.specials ?? []).map((c: any) => ({ ...c, cards: c.cards ?? [] })),
     boosters: d.boosters ?? [],
+    boostersSort: d.boostersSort,
+    boostersCollapsed: d.boostersCollapsed ?? [],
   };
 }
 
@@ -262,5 +269,7 @@ export function restoreBackup(b: BackupFile) {
     pokedexFilters: b.data.pokedexFilters ?? {},
     specials: b.data.specials ?? [],
     boosters: b.data.boosters ?? [],
+    boostersSort: b.data.boostersSort,
+    boostersCollapsed: b.data.boostersCollapsed ?? [],
   });
 }

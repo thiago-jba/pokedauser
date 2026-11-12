@@ -3,7 +3,8 @@ import React, { useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Alert } from '../alert';
-import { artTitle } from '../boosters';
+import { artTitle, BOOSTER_SORTS, groupBoosters } from '../boosters';
+import type { BoosterSort } from '../boosters';
 import { AddBooster, BOOSTER_RATIO } from '../components/AddBooster';
 import { CountryPicker } from '../components/CountryPicker';
 import { Flag } from '../components/Flag';
@@ -19,18 +20,21 @@ import { colors } from '../theme';
 export function BoostersScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useAppDimensions();
-  const { data, removeBooster, setBoosterCountry } = useStore();
+  const { data, removeBooster, setBoosterCountry, setBoostersSort, toggleBoosterSet, setBoostersCollapsed } = useStore();
+  const [sorting, setSorting] = useState(false);
+  const sort = (BOOSTER_SORTS.some((o) => o.value === data.boostersSort) ? data.boostersSort : 'recentes') as BoosterSort;
+  const collapsed = new Set(data.boostersCollapsed ?? []);
   const [adding, setAdding] = useState<{ setId?: string } | null>(null);
   const [detail, setDetail] = useState<BoosterEntry | null>(null);
   const [picking, setPicking] = useState(false);
   const list = data.boosters ?? [];
 
-  // expansões na ordem do último booster adicionado
-  const groups = useMemo(() => {
-    const m = new Map<string, BoosterEntry[]>();
-    for (const b of [...list].reverse()) m.set(b.setId, [...(m.get(b.setId) ?? []), b]);
-    return [...m.entries()].map(([setId, items]) => ({ setId, setName: items[0].setName, items }));
-  }, [list]);
+  // expansões na ordenação escolhida (data de lançamento: a salva no booster ou a da expansão em "Coleção")
+  const groups = useMemo(
+    () => groupBoosters(list, sort, (id) => data.collections.find((c) => c.setId === id)?.releaseDate),
+    [list, sort, data.collections],
+  );
+  const allCollapsed = groups.length > 0 && groups.every((g) => collapsed.has(g.setId));
   const countries = new Set(list.map((b) => b.country)).size;
 
   const cols = width >= 900 ? 7 : width >= 600 ? 5 : 4;
@@ -55,20 +59,36 @@ export function BoostersScreen() {
           <Text style={styles.addSub}>escolha a expansão e a estampa do pacote</Text>
         </Pressable>
         {!list.length ? <Text style={styles.empty}>Nenhum booster ainda. Toque em “Adicionar booster” para começar.</Text> : null}
-        {list.length ? <Text style={styles.hint}>Toque num booster para trocar o país ou remover.</Text> : null}
+        {list.length ? (
+          <>
+            <View style={styles.toolRow}>
+              <Pressable style={styles.sortPill} onPress={() => setSorting(true)}>
+                <Text style={styles.sortText} numberOfLines={1}>{`⇅ ${BOOSTER_SORTS.find((o) => o.value === sort)?.label}`}</Text>
+              </Pressable>
+              <Pressable style={styles.sortPill} onPress={() => setBoostersCollapsed(allCollapsed ? [] : groups.map((g) => g.setId))}>
+                <Text style={styles.sortText}>{allCollapsed ? '▾ Mostrar todas' : '▸ Recolher todas'}</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.hint}>Toque no nome da expansão para recolher ou mostrar; toque num booster para trocar o país ou remover.</Text>
+          </>
+        ) : null}
 
         {groups.map((g) => (
           <View key={g.setId} style={styles.group}>
             <GlassShine r={22} />
-            <View style={styles.groupHead}>
-              <Text style={styles.groupName} numberOfLines={1}>
-                {g.setName}
-              </Text>
-              <Text style={styles.groupCount}>{g.items.length}</Text>
+            <View style={[styles.groupHead, collapsed.has(g.setId) && { marginBottom: 0 }]}>
+              <Pressable style={styles.groupToggle} onPress={() => toggleBoosterSet(g.setId)} hitSlop={6}>
+                <Text style={styles.arrow}>{collapsed.has(g.setId) ? '▸' : '▾'}</Text>
+                <Text style={styles.groupName} numberOfLines={1}>
+                  {g.setName}
+                </Text>
+                <Text style={styles.groupCount}>{g.items.length}</Text>
+              </Pressable>
               <Pressable onPress={() => setAdding({ setId: g.setId })} hitSlop={8} style={styles.plus}>
                 <Text style={styles.plusText}>+</Text>
               </Pressable>
             </View>
+            {collapsed.has(g.setId) ? null : (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap }}>
               {g.items.map((b) => (
                 <Pressable key={b.uid} style={{ width: tile }} onPress={() => setDetail(b)}>
@@ -84,10 +104,32 @@ export function BoostersScreen() {
                 </Pressable>
               ))}
             </View>
+            )}
           </View>
         ))}
       </ScrollView>
 
+      <Modal visible={sorting} transparent animationType="fade" onRequestClose={() => setSorting(false)}>
+        <Pressable style={styles.backdrop} onPress={() => setSorting(false)}>
+          <View style={styles.sheet}>
+            <Text style={styles.sortTitle}>Ordenar expansões</Text>
+            {BOOSTER_SORTS.map((o) => (
+              <Pressable
+                key={o.value}
+                style={styles.sortItem}
+                onPress={() => {
+                  setBoostersSort(o.value);
+                  setSorting(false);
+                }}
+              >
+                <Text style={[styles.sortItemText, o.value === sort && { color: colors.accent, fontWeight: '900' }]}>
+                  {`${o.value === sort ? '● ' : ''}${o.label}`}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
       <AddBooster visible={!!adding} initialSetId={adding?.setId} onClose={() => setAdding(null)} />
 
       <Modal visible={!!current} transparent animationType="fade" onRequestClose={() => setDetail(null)}>
@@ -180,7 +222,23 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   groupHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  groupToggle: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  arrow: { color: colors.textDim, fontSize: 14, width: 14 },
   groupName: { color: colors.text, fontSize: 16, fontWeight: '900', flex: 1 },
+  toolRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
+  sortPill: {
+    flexShrink: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 999,
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  sortText: { color: colors.text, fontSize: 13, fontWeight: '700' },
+  sortTitle: { color: colors.text, fontSize: 18, fontWeight: '900', marginBottom: 8 },
+  sortItem: { paddingVertical: 11 },
+  sortItemText: { color: colors.text, fontSize: 15 },
   groupCount: { color: colors.gold, fontWeight: '900' },
   plus: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.surface2, alignItems: 'center', justifyContent: 'center' },
   plusText: { color: colors.text, fontSize: 18, fontWeight: '900', marginTop: -2 },

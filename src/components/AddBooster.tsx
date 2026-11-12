@@ -25,6 +25,7 @@ export function AddBooster({ visible, onClose, initialSetId }: { visible: boolea
   const [setId, setSetId] = useState<string | null>(null);
   const [arts, setArts] = useState<BoosterArt[]>([]);
   const [page, setPage] = useState<string | null>(null);
+  const [releaseDate, setReleaseDate] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [art, setArt] = useState<BoosterArt | null>(null);
@@ -58,6 +59,7 @@ export function AddBooster({ visible, onClose, initialSetId }: { visible: boolea
       .then((r) => {
         setArts(r.arts);
         setPage(r.page);
+        setReleaseDate(r.releaseDate);
         if (!r.arts.length) setError(r.page ? 'A Bulbapedia não tem fotos dos boosters desta expansão.' : 'Não achei esta expansão na Bulbapedia.');
       })
       .catch(() => setError('Não foi possível buscar as estampas agora (Bulbapedia). Toque para tentar de novo.'))
@@ -100,7 +102,7 @@ export function AddBooster({ visible, onClose, initialSetId }: { visible: boolea
   };
   const save = () => {
     if (!art || !setId) return;
-    addBooster({ setId, setName: setName(setId), file: art.file, label: art.label, lang: art.lang, image: art.image, country });
+    addBooster({ setId, setName: setName(setId), file: art.file, label: art.label, lang: art.lang, image: art.image, country, releaseDate });
     setDone(`✓ Adicionado: ${artTitle(art)} · ${countryName(country)}. Escolha outro ou toque em Concluir.`);
     setArt(null);
   };

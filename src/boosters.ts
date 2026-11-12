@@ -105,17 +105,23 @@ interface Cached {
   fetchedAt: string;
   page: string | null;
   arts: BoosterArt[];
+  /** data de lançamento da expansão (AAAA-MM-DD), para ordenar */
+  releaseDate?: string;
 }
 const cachePath = (setId: string) => `boosters/${setId.replace(/[^a-zA-Z0-9._-]/g, '_')}.json`;
 
 /** Estampas de booster de uma expansão (guardadas no aparelho por 30 dias). */
-export async function fetchBoosterArts(setId: string, force = false): Promise<{ page: string | null; arts: BoosterArt[] }> {
+export async function fetchBoosterArts(
+  setId: string,
+  force = false,
+): Promise<{ page: string | null; arts: BoosterArt[]; releaseDate?: string }> {
   const hit = kvReadJson<Cached>(cachePath(setId));
-  if (hit && !force && Date.now() - new Date(hit.fetchedAt).getTime() < CACHE_DAYS * 86400000 && hit.arts.length) return hit;
+  if (hit && !force && hit.releaseDate && Date.now() - new Date(hit.fetchedAt).getTime() < CACHE_DAYS * 86400000 && hit.arts.length) return hit;
 
   const set = await (await fetch(`${TCG}/sets/${encodeURIComponent(setId)}`)).json();
+  const releaseDate: string | undefined = set.releaseDate;
   const page = await findPage(set.name, set.abbreviation?.official);
-  if (!page) return { page: null, arts: [] };
+  if (!page) return { page: null, arts: [], releaseDate };
   const parsed = await api(`action=parse&prop=images&page=${encodeURIComponent(page)}`);
   const files: string[] = [...new Set<string>((parsed.parse?.images ?? []).filter(isBoosterFile))];
 
@@ -132,10 +138,60 @@ export async function fetchBoosterArts(setId: string, force = false): Promise<{ 
   const arts: BoosterArt[] = files.map((file) => ({ file, ...parseBoosterFile(file), image: thumbs.get(file.replace(/ /g, '_')) }));
   // internacionais primeiro, depois os outros idiomas (mantendo a ordem da galeria)
   arts.sort((a, b) => Number(!!a.lang) - Number(!!b.lang));
-  const out: Cached = { fetchedAt: new Date().toISOString(), page, arts };
+  const out: Cached = { fetchedAt: new Date().toISOString(), page, arts, releaseDate };
   if (arts.length) kvWriteJson(cachePath(setId), out);
   return out;
 }
 
 /** Endereço da página da expansão na Bulbapedia. */
 export const bulbapediaUrl = (page: string) => `https://bulbapedia.bulbagarden.net/wiki/${encodeURIComponent(page.replace(/ /g, '_'))}`;
+
+export const BOOSTER_SORTS = [
+  { value: 'recentes', label: 'Adicionados por último' },
+  { value: 'lancamento_desc', label: 'Lançamento: mais nova primeiro' },
+  { value: 'lancamento_asc', label: 'Lançamento: mais antiga primeiro' },
+  { value: 'nome_asc', label: 'Expansão: A → Z' },
+  { value: 'nome_desc', label: 'Expansão: Z → A' },
+  { value: 'qtd_desc', label: 'Mais boosters primeiro' },
+  { value: 'qtd_asc', label: 'Menos boosters primeiro' },
+] as const;
+export type BoosterSort = (typeof BOOSTER_SORTS)[number]['value'];
+
+export interface BoosterGroup<T> {
+  setId: string;
+  setName: string;
+  releaseDate?: string;
+  items: T[];
+  /** momento em que o último booster da expansão foi adicionado */
+  lastAdded: string;
+}
+
+/** Agrupa os boosters por expansão e ordena os grupos. Dentro de cada grupo: mais recentes primeiro. */
+export function groupBoosters<T extends { setId: string; setName: string; addedAt: string; releaseDate?: string }>(
+  list: T[],
+  sort: BoosterSort,
+  releaseOf: (setId: string) => string | undefined = () => undefined,
+): BoosterGroup<T>[] {
+  const m = new Map<string, BoosterGroup<T>>();
+  for (const b of list) {
+    const g = m.get(b.setId) ?? { setId: b.setId, setName: b.setName, items: [], lastAdded: '', releaseDate: undefined };
+    g.items.push(b);
+    if (b.addedAt > g.lastAdded) g.lastAdded = b.addedAt;
+    g.releaseDate = g.releaseDate ?? b.releaseDate ?? releaseOf(b.setId);
+    m.set(b.setId, g);
+  }
+  const groups = [...m.values()];
+  for (const g of groups) g.items.sort((a, b) => b.addedAt.localeCompare(a.addedAt));
+  const name = (a: BoosterGroup<T>, b: BoosterGroup<T>) => a.setName.localeCompare(b.setName, 'pt-BR');
+  const date = (g: BoosterGroup<T>) => g.releaseDate ?? '';
+  const cmp: Record<BoosterSort, (a: BoosterGroup<T>, b: BoosterGroup<T>) => number> = {
+    recentes: (a, b) => b.lastAdded.localeCompare(a.lastAdded),
+    lancamento_desc: (a, b) => date(b).localeCompare(date(a)) || name(a, b),
+    lancamento_asc: (a, b) => (date(a) || '9999').localeCompare(date(b) || '9999') || name(a, b),
+    nome_asc: name,
+    nome_desc: (a, b) => name(b, a),
+    qtd_desc: (a, b) => b.items.length - a.items.length || name(a, b),
+    qtd_asc: (a, b) => a.items.length - b.items.length || name(a, b),
+  };
+  return groups.sort(cmp[sort] ?? cmp.recentes);
+}

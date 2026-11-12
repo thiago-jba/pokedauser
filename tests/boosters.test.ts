@@ -18,3 +18,15 @@ assert.ok(!isBoosterFile('Base_Set_Booster_Box.jpg'));
 assert.ok(!isBoosterFile('Sun_and_Moon_Booster_Box.jpg'));
 assert.ok(!isBoosterFile('Expansion_Pack_20th_Art_Scan.jpg'));
 console.log('OK: estampas de booster (nomes da Bulbapedia)');
+
+import { groupBoosters } from '../src/boosters.ts';
+const b = (setId: string, setName: string, addedAt: string, releaseDate?: string) => ({ setId, setName, addedAt, releaseDate });
+const list = [b('a', 'Fagulhas', '2026-11-01', '2024-11-08'), b('b', 'Ascensão', '2026-11-03', '2023-03-31'), b('a', 'Fagulhas', '2026-11-02', '2024-11-08'), b('c', 'Base', '2026-10-01')];
+const ids = (s: any) => groupBoosters(list, s, (id) => (id === 'c' ? '1999-01-09' : undefined)).map((g) => g.setId).join('');
+assert.equal(ids('recentes'), 'bac');
+assert.equal(ids('lancamento_desc'), 'abc');
+assert.equal(ids('lancamento_asc'), 'cba');
+assert.equal(ids('nome_asc'), 'bcа'.replace('а', 'a'));
+assert.equal(ids('qtd_desc')[0], 'a');
+assert.equal(groupBoosters(list, 'recentes')[1].items[0].addedAt, '2026-11-02');
+console.log('OK: ordenação dos boosters');
