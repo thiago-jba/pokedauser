@@ -14,6 +14,7 @@ import { CARD_RATIO, colors } from '../theme';
 import { matchesQuery } from '../variants';
 import { AutoField } from './AddPokedexCard';
 import type { Suggestion } from './AddPokedexCard';
+import { CardPickerGrid } from './CardPickerGrid';
 import { CardScanner } from './CardScanner';
 import { CountryPicker } from './CountryPicker';
 import { Flag } from './Flag';
@@ -109,13 +110,23 @@ export function AddSpecialCard({ visible, col, onClose }: { visible: boolean; co
     );
   }, [setId, allOfSet, setCards, related, col]);
 
+  // miniaturas: as cartas da expansão escolhida (no filtro atual), em ordem de número
+  const gridCards = useMemo(() => {
+    if (!setId || card) return [];
+    const t = cardText.trim();
+    const num = (x: string) => (/^\d+$/.test(x) ? Number(x) : Infinity);
+    return candidates
+      .filter((c) => c.setId === setId && (!t || matchesCardNumber(c.localId, t) || matchesQuery(`${c.name} ${c.localId}`, t)))
+      .sort((a, b) => num(a.localId) - num(b.localId) || a.localId.localeCompare(b.localId));
+  }, [setId, card, candidates, cardText]);
+
   const cardTitle = (c: PokemonCardBrief) => {
     const official = setById.get(c.setId)?.official;
     return `${c.localId}${official && /^\d+$/.test(c.localId) ? `/${official}` : ''} · ${c.name}`;
   };
 
   const cardSuggestions: Suggestion[] = useMemo(() => {
-    if (card) return [];
+    if (card || setId) return [];
     const t = cardText.trim();
     return candidates
       .filter((c) => !t || matchesCardNumber(c.localId, t) || matchesQuery(`${c.name} ${c.localId}`, t))
@@ -273,7 +284,7 @@ export function AddSpecialCard({ visible, col, onClose }: { visible: boolean; co
 
             <AutoField
               label="Carta"
-              placeholder={setId ? 'Número ou nome (ex.: 25, SWSH232)' : `Todas as cartas de ${what} — digite o número ou o nome`}
+              placeholder={setId ? 'Filtrar as miniaturas por número ou nome (opcional)' : `Todas as cartas de ${what} — digite o número ou o nome`}
               text={cardText}
               onText={(t) => {
                 setCardText(t);
@@ -283,6 +294,26 @@ export function AddSpecialCard({ visible, col, onClose }: { visible: boolean; co
               onPick={pickCard}
               disabled={allOfSet && !setId}
             />
+
+            {setId && !card ? (
+              <CardPickerGrid
+                cards={gridCards}
+                onPick={(c) => pickCard(c.id)}
+                emptyText={cardText.trim() ? 'Nenhuma carta com esse número ou nome.' : `Nenhuma carta de ${what} nesta expansão.`}
+              />
+            ) : null}
+            {setId && card ? (
+              <Pressable
+                onPress={() => {
+                  setCard(null);
+                  setCardText('');
+                }}
+                hitSlop={6}
+                style={{ marginTop: 8, alignSelf: 'flex-start' }}
+              >
+                <Text style={{ color: colors.accent, fontWeight: '800', fontSize: 13 }}>‹ Escolher outra carta desta expansão</Text>
+              </Pressable>
+            ) : null}
 
             {card ? (
               <View style={{ marginTop: 12 }}>
