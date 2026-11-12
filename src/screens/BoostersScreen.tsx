@@ -9,6 +9,8 @@ import { AddBooster, BOOSTER_RATIO } from '../components/AddBooster';
 import { CountryPicker } from '../components/CountryPicker';
 import { Flag } from '../components/Flag';
 import { GlassShine } from '../components/Glass';
+import { SetLogo } from '../components/SetLogo';
+import { loadSetsCacheAnyAge } from '../storage';
 import { TAB_BAR_SPACE } from '../components/TabBar';
 import { countryName } from '../countries';
 import { useAppDimensions } from '../dimensions';
@@ -34,6 +36,8 @@ export function BoostersScreen() {
     () => groupBoosters(list, sort, (id) => data.collections.find((c) => c.setId === id)?.releaseDate),
     [list, sort, data.collections],
   );
+  // logo de cada expansão (lista de expansões guardada no aparelho)
+  const setInfo = useMemo(() => new Map((loadSetsCacheAnyAge() ?? []).map((x) => [x.id, x])), [list.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const allCollapsed = groups.length > 0 && groups.every((g) => collapsed.has(g.setId));
   const countries = new Set(list.map((b) => b.country)).size;
 
@@ -94,7 +98,8 @@ export function BoostersScreen() {
             <View style={[styles.groupHead, collapsed.has(g.setId) && { marginBottom: 0 }]}>
               <Pressable style={styles.groupToggle} onPress={() => toggleBoosterSet(g.setId)} hitSlop={6}>
                 <Text style={styles.arrow}>{collapsed.has(g.setId) ? '▸' : '▾'}</Text>
-                <Text style={styles.groupName} numberOfLines={1}>
+                <SetLogo setId={g.setId} logo={setInfo.get(g.setId)?.logo} symbol={setInfo.get(g.setId)?.symbol} style={styles.groupLogo} />
+                <Text style={styles.groupName} numberOfLines={2}>
                   {g.setName}
                 </Text>
                 <Text style={styles.groupCount}>{g.items.length}</Text>
@@ -236,6 +241,7 @@ const styles = StyleSheet.create({
   groupHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
   groupToggle: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
   arrow: { color: colors.textDim, fontSize: 14, width: 14 },
+  groupLogo: { width: 96, height: 40 },
   groupName: { color: colors.text, fontSize: 16, fontWeight: '900', flex: 1 },
   toolRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
   sortPill: {
