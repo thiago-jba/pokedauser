@@ -50,6 +50,8 @@ export interface AppData {
   /** ordenação e expansões recolhidas na aba Boosters */
   boostersSort?: string;
   boostersCollapsed?: string[];
+  /** ordenação dentro de cada expansão na aba Boosters: setId -> recentes | pais | estampa */
+  boostersInnerSort?: Record<string, string>;
 }
 
 export interface BoosterEntry {
@@ -146,6 +148,7 @@ export function normalizeData(d: any): AppData {
     boosters: d.boosters ?? [],
     boostersSort: d.boostersSort,
     boostersCollapsed: d.boostersCollapsed ?? [],
+    boostersInnerSort: d.boostersInnerSort ?? {},
   };
 }
 
@@ -271,5 +274,6 @@ export function restoreBackup(b: BackupFile) {
     boosters: b.data.boosters ?? [],
     boostersSort: b.data.boostersSort,
     boostersCollapsed: b.data.boostersCollapsed ?? [],
+    boostersInnerSort: b.data.boostersInnerSort ?? {},
   });
 }

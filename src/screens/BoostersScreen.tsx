@@ -3,13 +3,14 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Alert } from '../alert';
-import { artTitle, BOOSTER_SORTS, byArt, groupBoosters } from '../boosters';
-import type { BoosterSort } from '../boosters';
+import { artTitle, BOOSTER_SORTS, byArt, byCountry, groupBoosters, INNER_SORTS } from '../boosters';
+import type { BoosterSort, InnerSort } from '../boosters';
 import { AddBooster, BOOSTER_RATIO } from '../components/AddBooster';
 import { CountryPicker } from '../components/CountryPicker';
 import { Flag } from '../components/Flag';
 import { GlassShine } from '../components/Glass';
 import { SetLogo } from '../components/SetLogo';
+import { Segmented } from '../components/ui';
 import { loadSetsCacheAnyAge } from '../storage';
 import { ValueSummary } from '../components/ValueSummary';
 import { boosterBasket, boosterPrice, refreshBoosterPrices } from '../boosterPrices';
@@ -26,7 +27,8 @@ import { colors } from '../theme';
 export function BoostersScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useAppDimensions();
-  const { data, removeBooster, setBoosterCountry, setBoostersSort, toggleBoosterSet, setBoostersCollapsed } = useStore();
+  const { data, removeBooster, setBoosterCountry, setBoostersSort, toggleBoosterSet, setBoostersCollapsed, setBoosterInnerSort } = useStore();
+  const innerOf = (setId: string) => (INNER_SORTS.some((o) => o.value === data.boostersInnerSort?.[setId]) ? data.boostersInnerSort![setId] : 'recentes') as InnerSort;
   const [sorting, setSorting] = useState(false);
   const sort = (BOOSTER_SORTS.some((o) => o.value === data.boostersSort) ? data.boostersSort : 'recentes') as BoosterSort;
   const collapsed = new Set(data.boostersCollapsed ?? []);
@@ -77,8 +79,8 @@ export function BoostersScreen() {
   const tile = (width - 16 * 2 - 28 - gap * (cols - 1)) / cols;
   const current = detail ? list.find((b) => b.uid === detail.uid) ?? null : null;
 
-  // um booster: imagem com a bandeira; na visão por estampa, o nome do país embaixo
-  const renderTile = (b: BoosterEntry, showCountry: boolean) => (
+  // um booster: imagem com a bandeira; embaixo, o nome da estampa (ou do país, na visão por estampa)
+  const renderTile = (b: BoosterEntry, caption: 'pais' | 'estampa') => (
     <Pressable key={b.uid} style={{ width: tile }} onPress={() => setDetail(b)}>
       <View style={[styles.frame, { height: tile * BOOSTER_RATIO }]}>
         {b.image ? <Image source={{ uri: b.image }} style={StyleSheet.absoluteFill} contentFit="contain" cachePolicy="disk" /> : null}
@@ -87,7 +89,7 @@ export function BoostersScreen() {
         </View>
       </View>
       <Text style={styles.artName} numberOfLines={2}>
-        {showCountry ? countryName(b.country) : artTitle(b)}
+        {caption === 'pais' ? countryName(b.country) : artTitle(b)}
       </Text>
     </Pressable>
   );
@@ -155,19 +157,45 @@ export function BoostersScreen() {
                 <Text style={styles.plusText}>+</Text>
               </Pressable>
             </View>
-            {collapsed.has(g.setId) ? null : sort === 'estampa' ? (
-              <View style={{ gap: 14 }}>
-                {byArt(g.items).map((a) => (
-                  <View key={a.file}>
-                    <Text style={styles.artRowTitle} numberOfLines={1}>
-                      {`${artTitle(a.items[0])} · ${a.items.length} ${a.items.length === 1 ? 'booster' : 'boosters'}`}
-                    </Text>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap }}>{a.items.map((b) => renderTile(b, true))}</View>
+            {collapsed.has(g.setId) ? null : (
+              <>
+                {g.items.length > 1 ? (
+                  <Segmented<InnerSort>
+                    style={{ marginBottom: 10 }}
+                    value={innerOf(g.setId)}
+                    onChange={(v) => setBoosterInnerSort(g.setId, v)}
+                    options={INNER_SORTS.map((o) => ({ value: o.value, label: o.label }))}
+                  />
+                ) : null}
+                {innerOf(g.setId) === 'estampa' ? (
+                  <View style={{ gap: 14 }}>
+                    {byArt(g.items).map((a) => (
+                      <View key={a.file}>
+                        <Text style={styles.rowTitle} numberOfLines={1}>
+                          {`${artTitle(a.items[0])} · ${a.items.length}`}
+                        </Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap }}>{a.items.map((b) => renderTile(b, 'pais'))}</View>
+                      </View>
+                    ))}
                   </View>
-                ))}
-              </View>
-            ) : (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap }}>{g.items.map((b) => renderTile(b, false))}</View>
+                ) : innerOf(g.setId) === 'pais' ? (
+                  <View style={{ gap: 14 }}>
+                    {byCountry(g.items).map((c) => (
+                      <View key={c.country}>
+                        <View style={styles.rowTitleBox}>
+                          <Flag code={c.country} size={14} />
+                          <Text style={styles.rowTitle} numberOfLines={1}>
+                            {`${countryName(c.country)} · ${c.items.length}`}
+                          </Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap }}>{c.items.map((b) => renderTile(b, 'estampa'))}</View>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap }}>{g.items.map((b) => renderTile(b, 'estampa'))}</View>
+                )}
+              </>
             )}
           </View>
         ))}
@@ -306,7 +334,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   sortText: { color: colors.text, fontSize: 13, fontWeight: '700' },
-  artRowTitle: { color: colors.text, fontSize: 13, fontWeight: '800', marginBottom: 6 },
+  rowTitle: { color: colors.text, fontSize: 13, fontWeight: '800', marginBottom: 6, flexShrink: 1 },
+  rowTitleBox: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   sortTitle: { color: colors.text, fontSize: 18, fontWeight: '900', marginBottom: 8 },
   sortItem: { paddingVertical: 11 },
   sortItemText: { color: colors.text, fontSize: 15 },

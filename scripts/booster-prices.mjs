@@ -43,18 +43,46 @@ for (const g of groups) {
   if (!byNorm.has(k)) byNorm.set(k, []);
   byNorm.get(k).push(g);
 }
+// sigla oficial de cada expansão (ex.: SVI, DRI), que o TCGplayer também usa na maioria dos grupos
+const abbrOf = new Map();
+{
+  const q = tcgdex.map((s) => s.id);
+  await Promise.all(
+    Array.from({ length: 8 }, async () => {
+      while (q.length) {
+        const id = q.shift();
+        const d = await get(`https://api.tcgdex.net/v2/en/sets/${encodeURIComponent(id)}`);
+        const a = d?.abbreviation?.official;
+        if (a) abbrOf.set(id, String(a).toUpperCase());
+      }
+    }),
+  );
+}
+const byAbbr = new Map();
+for (const g of groups) if (g.abbreviation) byAbbr.set(String(g.abbreviation).toUpperCase(), [...(byAbbr.get(String(g.abbreviation).toUpperCase()) ?? []), g]);
+
 const pairs = [];
 for (const s of tcgdex) {
   const k = norm(s.name);
-  if (k.length < 3) continue;
-  let gs = byNorm.get(k) ?? [];
-  if (!gs.length) gs = groups.filter((g) => norm(groupTitle(g.name)).endsWith(k) && norm(groupTitle(g.name)).length - k.length <= 20);
+  const gs = new Set();
+  // 1) mesma sigla; 2) mesmo nome; 3) nome do grupo = nome + "Base Set"; 4) nome do grupo termina com o nome
+  for (const g of byAbbr.get(abbrOf.get(s.id)) ?? []) gs.add(g);
+  if (k.length >= 3) {
+    for (const g of byNorm.get(k) ?? []) gs.add(g);
+    for (const g of byNorm.get(`${k}baseset`) ?? []) gs.add(g);
+    if (!gs.size)
+      for (const g of groups) {
+        const t = norm(groupTitle(g.name));
+        if (t.endsWith(k) && t.length - k.length <= 20) gs.add(g);
+      }
+  }
   for (const g of gs) pairs.push({ setId: s.id, setName: s.name, group: g });
 }
 
 const isPack = (n) => /booster pack/i.test(n) && !/box|bundle|display|case|blister|code card|set of|lot|tin|collection/i.test(n);
 
 const out = {};
+const diag = [];
 const queue = [...pairs];
 async function worker() {
   while (queue.length) {
@@ -62,7 +90,11 @@ async function worker() {
     if (out[setId]) continue;
     const prods = (await get(`https://tcgcsv.com/tcgplayer/3/${group.groupId}/products`))?.results ?? [];
     const packs = prods.filter((p) => isPack(p.name));
-    if (!packs.length) continue;
+    if (!packs.length) {
+      const near = prods.filter((p) => /booster|pack/i.test(p.name)).map((p) => p.name).slice(0, 8);
+      if (near.length) diag.push(`${setId} <- ${group.name}: ${near.join(' | ')}`);
+      continue;
+    }
     const prices = (await get(`https://tcgcsv.com/tcgplayer/3/${group.groupId}/prices`))?.results ?? [];
     const priceOf = (id) => {
       const ps = prices.filter((p) => p.productId === id);
@@ -90,3 +122,5 @@ notice(
     .map((id) => `${id}: ${out[id] ? `US$ ${out[id].usd} (${out[id].product})` : '—'}`)
     .join('\n'),
 );
+notice('Sem Booster Pack reconhecido', diag.slice(0, 40).join('\n') || 'nenhum');
+notice('Sem ligação com o TCGplayer', tcgdex.filter((s) => !pairs.some((p) => p.setId === s.id)).map((s) => `${s.id}=${s.name}[${abbrOf.get(s.id) ?? ''}]`).join(', '));

@@ -42,3 +42,14 @@ const arts = byArt([
 assert.deepEqual(arts.map((a) => a.file), ['P', 'L']);
 assert.deepEqual(arts[0].items.map((b) => b.country), ['BR', 'US', 'JP', 'DE']);
 console.log('OK: boosters da mesma estampa lado a lado por país');
+
+import { byCountry } from '../src/boosters.ts';
+const bc = byCountry([
+  { file: 'P', country: 'JP', addedAt: '3' },
+  { file: 'L', country: 'BR', addedAt: '2' },
+  { file: 'P', country: 'BR', addedAt: '1' },
+  { file: 'L', country: 'DE', addedAt: '4' },
+]);
+assert.deepEqual(bc.map((c) => c.country), ['BR', 'JP', 'DE']);
+assert.deepEqual(bc[0].items.map((b) => b.file), ['P', 'L']);
+console.log('OK: boosters agrupados por país dentro da expansão');

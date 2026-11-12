@@ -59,6 +59,7 @@ interface Store {
   /** recolhe/mostra as imagens de uma expansão na aba Boosters */
   toggleBoosterSet: (setId: string) => void;
   setBoostersCollapsed: (setIds: string[]) => void;
+  setBoosterInnerSort: (setId: string, sort: string) => void;
   /** país padrão ao marcar uma carta (Configurações) */
   defaultCountry: string;
   setDefaultCountry: (code: string) => void;
@@ -312,6 +313,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       }),
     [],
   );
+  const setBoosterInnerSort = useCallback(
+    (setId: string, sort: string) => setData((d) => ({ ...d, boostersInnerSort: { ...(d.boostersInnerSort ?? {}), [setId]: sort } })),
+    [],
+  );
   const setBoostersCollapsed = useCallback((ids: string[]) => setData((d) => ({ ...d, boostersCollapsed: ids })), []);
   const setHomeSort = useCallback((homeSort: string) => setData((d) => ({ ...d, homeSort })), []);
   const defaultCountry = data.settings?.defaultCountry ?? DEFAULT_COUNTRY;
@@ -451,6 +456,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setBoostersSort,
       toggleBoosterSet,
       setBoostersCollapsed,
+      setBoosterInnerSort,
       defaultCountry,
       setDefaultCountry,
       setHomeView,
@@ -462,7 +468,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       cloudSignOut,
       cloudSyncNow,
     }),
-    [data, isOwned, ownedCountry, setCountry, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, setCategoryFilter, setCardSort, prefsFor, setSetMode, includeVariant, excludeVariant, excludeVariants, restoreExcluded, toggleEnglishImage, setHomeSort, addPokedexCard, removePokedexCard, setPokedexFilters, addSpecial, removeSpecial, renameSpecial, addSpecialCard, removeSpecialCard, setSpecialCardCountry, addBooster, removeBooster, setBoosterCountry, setBoostersSort, toggleBoosterSet, setBoostersCollapsed, defaultCountry, setDefaultCountry, setHomeView, toggleEra, patchCollection, reload, cloud, cloudSignIn, cloudSignOut, cloudSyncNow],
+    [data, isOwned, ownedCountry, setCountry, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, setCategoryFilter, setCardSort, prefsFor, setSetMode, includeVariant, excludeVariant, excludeVariants, restoreExcluded, toggleEnglishImage, setHomeSort, addPokedexCard, removePokedexCard, setPokedexFilters, addSpecial, removeSpecial, renameSpecial, addSpecialCard, removeSpecialCard, setSpecialCardCountry, addBooster, removeBooster, setBoosterCountry, setBoostersSort, toggleBoosterSet, setBoostersCollapsed, setBoosterInnerSort, defaultCountry, setDefaultCountry, setHomeView, toggleEra, patchCollection, reload, cloud, cloudSignIn, cloudSignOut, cloudSyncNow],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

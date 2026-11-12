@@ -154,7 +154,6 @@ export const BOOSTER_SORTS = [
   { value: 'nome_desc', label: 'Expansão: Z → A' },
   { value: 'qtd_desc', label: 'Mais boosters primeiro' },
   { value: 'qtd_asc', label: 'Menos boosters primeiro' },
-  { value: 'estampa', label: 'Mesma estampa, lado a lado por país' },
 ] as const;
 export type BoosterSort = (typeof BOOSTER_SORTS)[number]['value'];
 
@@ -193,7 +192,6 @@ export function groupBoosters<T extends { setId: string; setName: string; addedA
     nome_desc: (a, b) => name(b, a),
     qtd_desc: (a, b) => b.items.length - a.items.length || name(a, b),
     qtd_asc: (a, b) => a.items.length - b.items.length || name(a, b),
-    estampa: (a, b) => b.lastAdded.localeCompare(a.lastAdded),
   };
   return groups.sort(cmp[sort] ?? cmp.recentes);
 }
@@ -213,4 +211,25 @@ export function byArt<T extends { file: string; country: string; addedAt: string
     file,
     items: list.sort((a, b) => countryRank(a.country).localeCompare(countryRank(b.country)) || a.addedAt.localeCompare(b.addedAt)),
   }));
+}
+
+/** Ordenação dentro de cada expansão (escolhida em cada uma). */
+export const INNER_SORTS = [
+  { value: 'recentes', label: 'Recentes' },
+  { value: 'pais', label: 'Por país' },
+  { value: 'estampa', label: 'Por estampa' },
+] as const;
+export type InnerSort = (typeof INNER_SORTS)[number]['value'];
+
+/** Boosters de uma expansão separados por país (BR, US, JP, depois A-Z); dentro de cada país, por estampa. */
+export function byCountry<T extends { file: string; country: string; addedAt: string }>(items: T[]): { country: string; items: T[] }[] {
+  const artOrder = new Map(byArt(items).map((a, i) => [a.file, i]));
+  const m = new Map<string, T[]>();
+  for (const b of items) m.set(b.country, [...(m.get(b.country) ?? []), b]);
+  return [...m.entries()]
+    .sort((a, b) => countryRank(a[0]).localeCompare(countryRank(b[0])))
+    .map(([country, list]) => ({
+      country,
+      items: list.sort((a, b) => (artOrder.get(a.file) ?? 0) - (artOrder.get(b.file) ?? 0) || a.addedAt.localeCompare(b.addedAt)),
+    }));
 }
