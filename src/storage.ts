@@ -45,6 +45,22 @@ export interface AppData {
   pokedexFilters?: { categories?: string[]; rarities?: string[] };
   /** Coleções Especiais (Pikachu's, Energias…) — separadas das expansões e da Pokédex */
   specials?: SpecialCollection[];
+  /** Boosters (pacotes) que tenho: um item por pacote */
+  boosters?: BoosterEntry[];
+}
+
+export interface BoosterEntry {
+  uid: string;
+  setId: string;
+  setName: string;
+  /** arquivo da estampa na Bulbapedia (identifica a estampa) */
+  file: string;
+  label: string;
+  lang?: string;
+  image?: string;
+  /** país do booster (código ISO, ex.: "BR") */
+  country: string;
+  addedAt: string;
 }
 
 export type SpecialKind = 'pokemon' | 'energia' | 'nome';
@@ -122,6 +138,7 @@ export function normalizeData(d: any): AppData {
     pokedex: d.pokedex ?? {},
     pokedexFilters: d.pokedexFilters ?? {},
     specials: (d.specials ?? []).map((c: any) => ({ ...c, cards: c.cards ?? [] })),
+    boosters: d.boosters ?? [],
   };
 }
 
@@ -244,5 +261,6 @@ export function restoreBackup(b: BackupFile) {
     pokedex: b.data.pokedex ?? {},
     pokedexFilters: b.data.pokedexFilters ?? {},
     specials: b.data.specials ?? [],
+    boosters: b.data.boosters ?? [],
   });
 }

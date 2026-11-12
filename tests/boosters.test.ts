@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import { isBoosterFile, parseBoosterFile } from '../src/boosters.ts';
+
+const p = parseBoosterFile;
+assert.deepEqual(p('SV8_Booster_Pikachu.png'), { label: 'Pikachu', lang: undefined });
+assert.deepEqual(p('ME2_Booster_Mega_Charizard_X.png'), { label: 'Mega Charizard X', lang: undefined });
+assert.deepEqual(p('Base_Set_Booster_Charizard_BR.jpg'), { label: 'Charizard', lang: 'português' });
+assert.deepEqual(p('Base_Set_Booster_Venusaur_Shadowless.jpg'), { label: 'Venusaur Shadowless', lang: undefined });
+assert.deepEqual(p('SV10.5_BLK_Booster_EN.png'), { label: 'BLK', lang: undefined });
+assert.deepEqual(p('151_Booster.png'), { label: 'Estampa única', lang: undefined });
+assert.deepEqual(p('SV1S_pack_Japanese.png'), { label: 'SV1S', lang: 'japonês' });
+assert.deepEqual(p('S7D_Skyscraping_Perfection_pack.jpg'), { label: 'S7D Skyscraping Perfection', lang: 'japonês' });
+assert.deepEqual(p('S12a_VSTAR_Universe_Booster_Chinese.png'), { label: 'VSTAR Universe', lang: 'chinês' });
+assert.deepEqual(p('Prismatic_Evolutions_Booster_Eevee_Sylveon.png'), { label: 'Eevee Sylveon', lang: undefined });
+assert.ok(isBoosterFile('SV1_Booster_Koraidon.png'));
+assert.ok(isBoosterFile('SM1_Collection_Sun_pack.jpg'));
+assert.ok(!isBoosterFile('Base_Set_Booster_Box.jpg'));
+assert.ok(!isBoosterFile('Sun_and_Moon_Booster_Box.jpg'));
+assert.ok(!isBoosterFile('Expansion_Pack_20th_Art_Scan.jpg'));
+console.log('OK: estampas de booster (nomes da Bulbapedia)');

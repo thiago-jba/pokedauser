@@ -8,7 +8,7 @@ import { allPossibleKeys, ownedKey } from './collection';
 import type { SetMode, SetPrefs } from './collection';
 import { deleteSetPrices } from './prices';
 import { AppData, CollectionEntry, deleteSet, loadData, normalizeData, PokedexCard, saveData, saveSet } from './storage';
-import type { SpecialCard, SpecialCollection } from './storage';
+import type { BoosterEntry, SpecialCard, SpecialCollection } from './storage';
 import { DEFAULT_COUNTRY } from './countries';
 import { ApiVariantDetailed, variantKey } from './variants';
 
@@ -51,6 +51,10 @@ interface Store {
   addSpecialCard: (uid: string, card: Omit<SpecialCard, 'uid' | 'addedAt'>) => void;
   removeSpecialCard: (uid: string, cardUid: string) => void;
   setSpecialCardCountry: (uid: string, cardUid: string, country: string) => void;
+  /** Boosters */
+  addBooster: (b: Omit<BoosterEntry, 'uid' | 'addedAt'>) => void;
+  removeBooster: (uid: string) => void;
+  setBoosterCountry: (uid: string, country: string) => void;
   /** país padrão ao marcar uma carta (Configurações) */
   defaultCountry: string;
   setDefaultCountry: (code: string) => void;
@@ -285,6 +289,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       updSpecial(uid, (c) => ({ ...c, cards: c.cards.map((x) => (x.uid === cardUid ? { ...x, country } : x)) })),
     [], // eslint-disable-line react-hooks/exhaustive-deps
   );
+  const addBooster = useCallback((b: Omit<BoosterEntry, 'uid' | 'addedAt'>) => {
+    const entry: BoosterEntry = { ...b, uid: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, addedAt: new Date().toISOString() };
+    setData((d) => ({ ...d, boosters: [...(d.boosters ?? []), entry] }));
+  }, []);
+  const removeBooster = useCallback((uid: string) => setData((d) => ({ ...d, boosters: (d.boosters ?? []).filter((b) => b.uid !== uid) })), []);
+  const setBoosterCountry = useCallback(
+    (uid: string, country: string) => setData((d) => ({ ...d, boosters: (d.boosters ?? []).map((b) => (b.uid === uid ? { ...b, country } : b)) })),
+    [],
+  );
   const setHomeSort = useCallback((homeSort: string) => setData((d) => ({ ...d, homeSort })), []);
   const defaultCountry = data.settings?.defaultCountry ?? DEFAULT_COUNTRY;
   const setDefaultCountry = useCallback(
@@ -417,6 +430,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       addSpecialCard,
       removeSpecialCard,
       setSpecialCardCountry,
+      addBooster,
+      removeBooster,
+      setBoosterCountry,
       defaultCountry,
       setDefaultCountry,
       setHomeView,
@@ -428,7 +444,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       cloudSignOut,
       cloudSyncNow,
     }),
-    [data, isOwned, ownedCountry, setCountry, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, setCategoryFilter, setCardSort, prefsFor, setSetMode, includeVariant, excludeVariant, excludeVariants, restoreExcluded, toggleEnglishImage, setHomeSort, addPokedexCard, removePokedexCard, setPokedexFilters, addSpecial, removeSpecial, renameSpecial, addSpecialCard, removeSpecialCard, setSpecialCardCountry, defaultCountry, setDefaultCountry, setHomeView, toggleEra, patchCollection, reload, cloud, cloudSignIn, cloudSignOut, cloudSyncNow],
+    [data, isOwned, ownedCountry, setCountry, setOwned, toggleOwned, upsertCollection, removeCollection, addCustomVariant, removeCustomVariant, setRarityFilter, setCategoryFilter, setCardSort, prefsFor, setSetMode, includeVariant, excludeVariant, excludeVariants, restoreExcluded, toggleEnglishImage, setHomeSort, addPokedexCard, removePokedexCard, setPokedexFilters, addSpecial, removeSpecial, renameSpecial, addSpecialCard, removeSpecialCard, setSpecialCardCountry, addBooster, removeBooster, setBoosterCountry, defaultCountry, setDefaultCountry, setHomeView, toggleEra, patchCollection, reload, cloud, cloudSignIn, cloudSignOut, cloudSyncNow],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

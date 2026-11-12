@@ -15,6 +15,7 @@ import { PokemonScreen } from './src/screens/PokemonScreen';
 import { TabBar } from './src/components/TabBar';
 import { SpecialsScreen } from './src/screens/SpecialsScreen';
 import { SpecialScreen } from './src/screens/SpecialScreen';
+import { BoostersScreen } from './src/screens/BoostersScreen';
 import type { PokemonCardBrief } from './src/pokedex';
 import { StoreProvider } from './src/store';
 import { colors } from './src/theme';
@@ -26,7 +27,18 @@ type Route =
   | { name: 'pokedex' }
   | { name: 'pokemon'; dexId: number; prefill?: PokemonCardBrief }
   | { name: 'especiais' }
+  | { name: 'boosters' }
   | { name: 'especial'; uid: string };
+
+// No navegador, não informa o endereço do app ao buscar imagens: a Bulbapedia (fotos dos boosters)
+// recusa imagens pedidas a partir de outros sites. No celular isso não é enviado.
+const webDoc: any = Platform.OS === 'web' ? (globalThis as any).document : null;
+if (webDoc && !webDoc.querySelector('meta[name="referrer"]')) {
+  const m = webDoc.createElement('meta');
+  m.name = 'referrer';
+  m.content = 'no-referrer';
+  webDoc.head.appendChild(m);
+}
 
 export default function App() {
   const [route, setRoute] = useState<Route>({ name: 'home' });
@@ -85,6 +97,8 @@ export default function App() {
               <PokedexScreen openPokemon={(dexId, prefill) => setRoute({ name: 'pokemon', dexId, prefill })} />
             ) : route.name === 'especiais' ? (
               <SpecialsScreen openSpecial={(uid) => setRoute({ name: 'especial', uid })} />
+            ) : route.name === 'boosters' ? (
+              <BoostersScreen />
             ) : route.name === 'especial' ? (
               <SpecialScreen key={route.uid} uid={route.uid} onBack={() => setRoute({ name: 'especiais' })} />
             ) : route.name === 'pokemon' ? (
@@ -98,10 +112,10 @@ export default function App() {
               <SetScreen key={route.setId} setId={route.setId} onBack={() => setRoute({ name: 'home' })} />
             )}
           </ErrorBoundary>
-          {route.name === 'home' || route.name === 'pokedex' || route.name === 'especiais' ? (
+          {route.name === 'home' || route.name === 'pokedex' || route.name === 'especiais' || route.name === 'boosters' ? (
             <TabBar
               tab={route.name === 'home' ? 'colecao' : route.name}
-              onChange={(t) => setRoute(t === 'colecao' ? { name: 'home' } : t === 'pokedex' ? { name: 'pokedex' } : { name: 'especiais' })}
+              onChange={(t) => setRoute(t === 'colecao' ? { name: 'home' } : t === 'pokedex' ? { name: 'pokedex' } : t === 'especiais' ? { name: 'especiais' } : { name: 'boosters' })}
             />
           ) : null}
           <UpdateBanner />
