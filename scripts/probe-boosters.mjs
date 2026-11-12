@@ -1,30 +1,20 @@
-// Teste: encontra na Bulbapedia as estampas de booster de algumas expansões.
-const API = 'https://bulbapedia.bulbagarden.net/w/api.php?format=json&origin=*&';
-const api = async (q) => (await fetch(API + q, { headers: { 'user-agent': 'pokecolecao-probe/1.0' } })).json();
-const sets = [['Scarlet & Violet', 'SVI'], ['151', 'MEW'], ['Prismatic Evolutions', 'PRE'], ['Sword & Shield', 'SSH'], ['Evolving Skies', 'EVS'], ['Base Set', 'BS'], ['Mega Evolution', 'MEG'], ['Surging Sparks', 'SSP'], ['Crown Zenith', 'CRZ'], ['Sun & Moon', 'SUM'], ['XY', 'XY']];
-for (const [name, abbr] of sets) {
+const UA = { 'user-agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Mobile Safari/537.36' };
+const tests = [
+  ['bulba-api-UA', 'https://bulbapedia.bulbagarden.net/w/api.php?format=json&origin=*&action=parse&prop=images&page=Scarlet_%26_Violet_(TCG)', /Booster[^"|]*/g],
+  ['bulba-mobile', 'https://m.bulbapedia.bulbagarden.net/wiki/Scarlet_%26_Violet_(TCG)', /[A-Za-z0-9_]*Booster[A-Za-z0-9_]*\.(png|jpg)/g],
+  ['bulba-archives-img', 'https://archives.bulbagarden.net/wiki/File:SV1_Booster_Koraidon.png', /media\/upload\/[^"]*SV1_Booster_Koraidon\.png/g],
+  ['serebii-sv', 'https://www.serebii.net/card/scarletviolet/', /[^"' ]*(booster|pack)[^"' ]*\.(jpg|png)/gi],
+  ['serebii-151', 'https://www.serebii.net/card/151/', /[^"' ]*(booster|pack)[^"' ]*\.(jpg|png)/gi],
+  ['pokemon-tcg-sv', 'https://tcg.pokemon.com/en-us/expansions/scarlet-violet/', /[^"' ]*(booster|pack)[^"' ]*\.(jpg|png|webp)/gi],
+  ['pokemon-tcg-pt', 'https://tcg.pokemon.com/pt-br/expansions/scarlet-violet/', /[^"' ]*(booster|pack)[^"' ]*\.(jpg|png|webp)/gi],
+];
+for (const [name, url, re] of tests) {
   let line = `${name}: `;
   try {
-    let title = null;
-    for (const cand of [`${name} (TCG)`, abbr]) {
-      const j = await api(`action=query&redirects=1&titles=${encodeURIComponent(cand)}`);
-      const p = Object.values(j.query?.pages ?? {})[0];
-      if (p && !('missing' in p) && /\(TCG\)$/.test(p.title)) { title = p.title; break; }
-    }
-    if (!title) {
-      const s = await api(`action=query&list=search&srlimit=5&srsearch=${encodeURIComponent(name + ' TCG expansion')}`);
-      title = s.query?.search?.map((x) => x.title).find((t) => /\(TCG\)$/.test(t)) ?? null;
-      line += '[busca] ';
-    }
-    line += `${title} -> `;
-    const im = await api(`action=parse&prop=images&page=${encodeURIComponent(title)}`);
-    const files = (im.parse?.images ?? []).filter((f) => /booster|pack/i.test(f));
-    line += files.join(' | ');
-    if (files[0]) {
-      const ii = await api(`action=query&prop=imageinfo&iiprop=url&iiurlwidth=300&titles=File:${encodeURIComponent(files[0])}`);
-      line += ` || ex.: ${Object.values(ii.query.pages)[0].imageinfo?.[0]?.thumburl}`;
-    }
+    const r = await fetch(url, { headers: UA });
+    const t = await r.text();
+    const hits = [...new Set(t.match(re) ?? [])].slice(0, 12);
+    line += `HTTP ${r.status}, ${t.length} chars, cloudflare=${/Just a moment|cf-chl/i.test(t)} :: ${hits.join(' , ')}`;
   } catch (e) { line += 'ERRO ' + e; }
-  console.log(line);
-  console.log(`::notice title=${name}::${line.replace(/%/g, '%25')}`);
+  console.log(`::notice title=${name}::${line.replace(/%/g, '%25').slice(0, 3000)}`);
 }
