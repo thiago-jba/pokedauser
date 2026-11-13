@@ -102,15 +102,61 @@ const api = async (q: string) => {
 };
 
 /** Página da expansão na Bulbapedia: "<nome> (TCG)", depois a sigla (que redireciona), depois a busca. */
-async function findPage(nameEn: string, abbr?: string): Promise<string | null> {
-  for (const cand of [`${nameEn} (TCG)`, abbr].filter(Boolean) as string[]) {
+async function findPage(nameEn: string, abbr?: string, extra?: ExtraBoosterSet): Promise<string | null> {
+  const accept = extra?.accept ?? /\(TCG\)$/;
+  const cands = extra ? extra.pages : ([`${nameEn} (TCG)`, abbr].filter(Boolean) as string[]);
+  for (const cand of cands) {
     const j = await api(`action=query&redirects=1&titles=${encodeURIComponent(cand)}`);
     const p: any = Object.values(j.query?.pages ?? {})[0];
-    if (p && !('missing' in p) && /\(TCG\)$/.test(p.title)) return p.title;
+    if (p && !('missing' in p) && accept.test(p.title)) return p.title;
   }
-  const s = await api(`action=query&list=search&srlimit=8&srsearch=${encodeURIComponent(`${nameEn} TCG expansion`)}`);
-  return s.query?.search?.map((x: any) => x.title).find((t: string) => /\(TCG\)$/.test(t)) ?? null;
+  const q = extra?.search ?? `${nameEn} TCG expansion`;
+  const s = await api(`action=query&list=search&srlimit=8&srsearch=${encodeURIComponent(q)}`);
+  return s.query?.search?.map((x: any) => x.title).find((t: string) => accept.test(t)) ?? null;
 }
+
+/**
+ * Produtos com booster próprio que não são expansões no banco de cartas (TCGdex).
+ * As cartas deles estão em outras expansões (Trick or Trade = reimpressões com carimbo de abóbora;
+ * Parceiros Iniciais = MEP Black Star Promos), mas os pacotes têm estampa própria na Bulbapedia.
+ */
+export interface ExtraBoosterSet {
+  id: string;
+  namePt: string;
+  nameEn: string;
+  releaseDate: string;
+  /** páginas da Bulbapedia, na ordem de tentativa */
+  pages: string[];
+  /** busca na Bulbapedia se nenhuma página existir */
+  search: string;
+  /** título aceito como a página do produto */
+  accept: RegExp;
+}
+const tot = (year: number, date: string): ExtraBoosterSet => ({
+  id: `tot${year}`,
+  namePt: `Trick or Trade ${year} (Halloween)`,
+  nameEn: `Trick or Trade ${year}`,
+  releaseDate: date,
+  pages: [`Trick or Trade ${year} (TCG)`, ...(year === 2022 ? ['Trick or Trade (TCG)'] : [])],
+  search: `Trick or Trade ${year}`,
+  accept: new RegExp(`Trick or Trade${year === 2022 ? '' : ` ${year}`}`, 'i'),
+});
+export const EXTRA_BOOSTER_SETS: ExtraBoosterSet[] = [
+  {
+    id: 'parceiros-iniciais-2026',
+    namePt: 'Parceiros Iniciais (2026)',
+    nameEn: 'First Partner Illustration Collection',
+    releaseDate: '2026-03-30',
+    pages: ['First Partner Illustration Collection (TCG)', 'First Partner Illustration Collection', 'First Partner Collection (TCG)'],
+    search: 'First Partner Illustration Collection',
+    accept: /First Partner/i,
+  },
+  tot(2025, '2025-09-05'),
+  tot(2024, '2024-09-06'),
+  tot(2023, '2023-09-01'),
+  tot(2022, '2022-09-02'),
+];
+export const extraBoosterSet = (id: string) => EXTRA_BOOSTER_SETS.find((x) => x.id === id);
 
 interface Cached {
   fetchedAt: string;
@@ -131,9 +177,12 @@ export async function fetchBoosterArts(
   const hit = kvReadJson<Cached>(cachePath(setId));
   if (hit && !force && hit.v === CACHE_VERSION && hit.releaseDate && Date.now() - new Date(hit.fetchedAt).getTime() < CACHE_DAYS * 86400000 && hit.arts.length) return hit;
 
-  const set = await (await fetch(`${TCG}/sets/${encodeURIComponent(setId)}`)).json();
+  const extra = extraBoosterSet(setId);
+  const set = extra
+    ? { name: extra.nameEn, releaseDate: extra.releaseDate, abbreviation: undefined as any }
+    : await (await fetch(`${TCG}/sets/${encodeURIComponent(setId)}`)).json();
   const releaseDate: string | undefined = set.releaseDate;
-  const page = await findPage(set.name, set.abbreviation?.official);
+  const page = await findPage(set.name, set.abbreviation?.official, extra);
   if (!page) return { page: null, arts: [], releaseDate };
   const parsed = await api(`action=parse&prop=images&page=${encodeURIComponent(page)}`);
   const files: string[] = [...new Set<string>((parsed.parse?.images ?? []).filter(isBoosterFile))];

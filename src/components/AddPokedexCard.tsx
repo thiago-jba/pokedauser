@@ -10,6 +10,7 @@ import { CARD_RATIO, colors } from '../theme';
 import { matchesQuery, normalize } from '../variants';
 import { CardPickerGrid } from './CardPickerGrid';
 import { CardScanner } from './CardScanner';
+import { setSearchText } from '../specials';
 import { ocrAvailable } from '../ocr';
 import { Chip } from './ui';
 
@@ -159,7 +160,7 @@ export function AddPokedexCard({
 
   const setSuggestions: Suggestion[] = useMemo(() => {
     if (setId) return [];
-    const list = sets.filter((s) => !setText.trim() || matchesQuery(`${s.namePt ?? ''} ${s.nameEn} ${s.id}`, setText));
+    const list = sets.filter((s) => !setText.trim() || matchesQuery(setSearchText(s), setText));
     // coleções que têm este Pokémon vêm primeiro
     list.sort((a, b) => Number(setsWithPokemon.has(b.id)) - Number(setsWithPokemon.has(a.id)));
     return list.slice(0, 8).map((s) => ({

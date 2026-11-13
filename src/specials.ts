@@ -127,3 +127,10 @@ export function buildSpecialSections(
     }))
     .sort((a, b) => order(a.setId) - order(b.setId) || a.setName.localeCompare(b.setName, 'pt-BR'));
 }
+
+/** Outros nomes para achar a expansão na busca (produtos cujas cartas ficam numa expansão de promos). */
+export const SET_ALIASES: Record<string, string> = {
+  mep: 'parceiros iniciais first partner illustration collection',
+};
+export const setSearchText = (s: { id: string; namePt?: string; nameEn: string }) =>
+  `${s.namePt ?? ''} ${s.nameEn} ${s.id} ${SET_ALIASES[s.id] ?? ''}`;

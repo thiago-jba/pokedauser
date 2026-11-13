@@ -92,6 +92,8 @@ export interface SpecialCollection {
 export interface SpecialCard extends PokedexCard {
   /** país da carta (código ISO, ex.: "BR") */
   country: string;
+  /** carimbo especial que a versão do banco de cartas não traz (ex.: abóbora do Trick or Trade) */
+  stamp?: 'trick-or-trade';
 }
 
 export interface PokedexCard {

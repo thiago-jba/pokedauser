@@ -2,7 +2,7 @@ import { Image } from 'expo-image';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { fetchAllSets, SetSummary } from '../api';
-import { artTitle, bulbapediaUrl, fetchBoosterArts } from '../boosters';
+import { artTitle, bulbapediaUrl, EXTRA_BOOSTER_SETS, fetchBoosterArts } from '../boosters';
 import type { BoosterArt } from '../boosters';
 import { countryName } from '../countries';
 import { loadSetsCacheAnyAge, saveSetsCache } from '../storage';
@@ -34,7 +34,12 @@ export function AddBooster({ visible, onClose, initialSetId }: { visible: boolea
   const [done, setDone] = useState<string | null>(null);
   const [w, setW] = useState(0);
 
-  const setById = useMemo(() => new Map(sets.map((s) => [s.id, s])), [sets]);
+  // expansões do banco de cartas + produtos com booster próprio (Trick or Trade, Parceiros Iniciais)
+  const allSets = useMemo<SetSummary[]>(
+    () => [...EXTRA_BOOSTER_SETS.map((x) => ({ id: x.id, namePt: x.namePt, nameEn: x.nameEn, total: 0 })), ...sets],
+    [sets],
+  );
+  const setById = useMemo(() => new Map(allSets.map((s) => [s.id, s])), [allSets]);
   const setName = (id: string) => setById.get(id)?.namePt ?? setById.get(id)?.nameEn ?? id;
 
   useEffect(() => {
@@ -78,11 +83,11 @@ export function AddBooster({ visible, onClose, initialSetId }: { visible: boolea
     if (setId) return [];
     const t = setText.trim();
     if (!t) return [];
-    return sets
+    return allSets
       .filter((s) => matchesQuery(`${s.namePt ?? ''} ${s.nameEn} ${s.id}`, t))
       .slice(0, 8)
       .map((s) => ({ key: s.id, title: s.namePt ?? s.nameEn, subtitle: s.nameEn !== (s.namePt ?? s.nameEn) ? s.nameEn : undefined }));
-  }, [sets, setText, setId]);
+  }, [allSets, setText, setId]);
 
   // quantos de cada estampa já tenho
   const have = useMemo(() => {

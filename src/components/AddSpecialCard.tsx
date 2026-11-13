@@ -6,7 +6,7 @@ import { countryName } from '../countries';
 import { ocrAvailable } from '../ocr';
 import { fetchCardDetail, fetchSetCards, identifyCard, matchesCardNumber, parseFooter } from '../pokedex';
 import type { CardDetailInfo, PokemonCardBrief } from '../pokedex';
-import { fetchSpecialCandidates, matchesSpecial, uniqueCards } from '../specials';
+import { fetchSpecialCandidates, matchesSpecial, setSearchText, uniqueCards } from '../specials';
 import { loadSetsCacheAnyAge, saveSetsCache } from '../storage';
 import type { SpecialCollection } from '../storage';
 import { useStore } from '../store';
@@ -50,6 +50,7 @@ export function AddSpecialCard({
   const [extra, setExtra] = useState<PokemonCardBrief[]>([]);
   const [detail, setDetail] = useState<CardDetailInfo | null>(null);
   const [variantKey, setVariantKey] = useState<string | null>(null);
+  const [tot, setTot] = useState(false);
   const [country, setCountry] = useState(defaultCountry);
   const [pickingCountry, setPickingCountry] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -107,7 +108,7 @@ export function AddSpecialCard({
 
   const setSuggestions: Suggestion[] = useMemo(() => {
     if (setId) return [];
-    const list = sets.filter((s) => !setText.trim() || matchesQuery(`${s.namePt ?? ''} ${s.nameEn} ${s.id}`, setText));
+    const list = sets.filter((s) => !setText.trim() || matchesQuery(setSearchText(s), setText));
     // expansões que têm cartas da coleção vêm primeiro
     list.sort((a, b) => Number(setsWith.has(b.id)) - Number(setsWith.has(a.id)));
     return list.slice(0, 8).map((s) => ({
@@ -222,6 +223,7 @@ export function AddSpecialCard({
     setScanMsg(null);
     setAllOfSet(false);
     setExtra([]);
+    setTot(false);
     onClose();
   };
   const save = () => {
@@ -241,6 +243,7 @@ export function AddSpecialCard({
       image: card.image,
       official: setById.get(card.setId)?.official,
       country,
+      stamp: tot ? 'trick-or-trade' : undefined,
     });
     close();
   };
@@ -278,6 +281,12 @@ export function AddSpecialCard({
               suggestions={setSuggestions}
               onPick={pickSet}
             />
+            {!setId && /trick|treat|halloween|abóbora|abobora/i.test(setText) ? (
+              <Text style={styles.hint}>
+                🎃 Trick or Trade não é uma expansão: as cartas são reimpressões com carimbo de abóbora. Escolha a expansão original da carta
+                (está escrita no rodapé) e marque “Carimbo Trick or Trade” ao adicionar.
+              </Text>
+            ) : null}
 
             <Segmented
               style={{ marginTop: 12 }}
@@ -346,6 +355,10 @@ export function AddSpecialCard({
                   </View>
                 )}
                 {detail?.rarity ? <Text style={styles.rarity}>{`Raridade: ${detail.rarity}`}</Text> : null}
+                <View style={{ flexDirection: 'row', marginTop: 10 }}>
+                  <Chip label={tot ? '✓ 🎃 Carimbo Trick or Trade' : '🎃 Carimbo Trick or Trade'} active={tot} onPress={() => setTot(!tot)} />
+                </View>
+                <Text style={styles.rarity}>Para cartas do Trick or Trade (Halloween): escolha a carta na expansão original e marque o carimbo.</Text>
 
                 <Text style={[styles.label, { marginTop: 14 }]}>País</Text>
                 <Pressable style={styles.countryBtn} onPress={() => setPickingCountry(true)}>

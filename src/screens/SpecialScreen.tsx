@@ -81,7 +81,7 @@ export function SpecialScreen({ uid, onBack }: { uid: string; onBack: () => void
       .map((sec) => ({
         ...sec,
         tiles: sec.tiles.filter((x) =>
-          matchesQuery(`${x.card.name} ${sec.setName} ${x.card.localId} ${x.kind === 'owned' ? x.card.variantLabel ?? '' : ''}`, t),
+          matchesQuery(`${x.card.name} ${sec.setName} ${x.card.localId} ${x.kind === 'owned' ? `${x.card.variantLabel ?? ''} ${x.card.stamp ? 'trick or trade halloween' : ''}` : ''}`, t),
         ),
       }))
       .filter((sec) => sec.tiles.length);
@@ -130,7 +130,7 @@ export function SpecialScreen({ uid, onBack }: { uid: string; onBack: () => void
         {`${c.localId}${c.official && /^\d+$/.test(c.localId) ? `/${c.official}` : ''} · ${c.name}`}
       </Text>
       <Text style={styles.cardType} numberOfLines={1}>
-        {c.variantLabel ?? 'Normal'}
+        {`${c.variantLabel ?? 'Normal'}${c.stamp === 'trick-or-trade' ? ' · 🎃 Trick or Trade' : ''}`}
       </Text>
     </Pressable>
   );

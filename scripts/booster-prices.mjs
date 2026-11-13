@@ -117,6 +117,33 @@ async function worker() {
 }
 await Promise.all(Array.from({ length: 4 }, worker));
 
+// produtos com booster próprio que não são expansões na TCGdex (mesmos ids de src/boosters.ts → EXTRA_BOOSTER_SETS)
+const EXTRAS = [
+  { id: 'parceiros-iniciais-2026', product: /first partner (illustration )?collection.*booster pack/i },
+  ...[2022, 2023, 2024, 2025].map((y) => ({ id: `tot${y}`, product: new RegExp(`trick or trade.*${y}.*booster pack|trick or trade.*booster pack.*${y}`, 'i') })),
+];
+const extraGroups = groups.filter((g) => /trick or trade|first partner|miscellaneous|promo|mega evolution|me:|sv:/i.test(g.name));
+const extraFound = [];
+for (const g of extraGroups) {
+  if (EXTRAS.every((x) => out[x.id])) break;
+  const prods = (await get(`https://tcgcsv.com/tcgplayer/3/${g.groupId}/products`))?.results ?? [];
+  const hits = EXTRAS.filter((x) => !out[x.id]).map((x) => ({ x, ps: prods.filter((p) => x.product.test(p.name) && !/\b(bundle|box|display|case|blister|set of|lot)\b/i.test(p.name)) }));
+  if (!hits.some((h) => h.ps.length)) continue;
+  const prices = (await get(`https://tcgcsv.com/tcgplayer/3/${g.groupId}/prices`))?.results ?? [];
+  for (const { x, ps } of hits) {
+    const priced = ps
+      .map((p) => ({ p, usd: Math.min(...prices.filter((q) => q.productId === p.productId).map((q) => q.marketPrice ?? q.midPrice).filter((v) => v > 0)) }))
+      .filter((v) => Number.isFinite(v.usd))
+      .sort((a, b) => a.usd - b.usd);
+    if (priced.length) {
+      out[x.id] = { usd: Math.round(priced[0].usd * 100) / 100, product: priced[0].p.name, productId: priced[0].p.productId };
+      extraFound.push(`${x.id}: US$ ${out[x.id].usd} (${priced[0].p.name} — ${g.name})`);
+    }
+  }
+  await sleep(150);
+}
+notice('Produtos extras (Trick or Trade, Parceiros Iniciais)', extraFound.join('\n') || 'nenhum preço encontrado');
+
 mkdirSync('public', { recursive: true });
 writeFileSync('public/boosters-precos.json', JSON.stringify({ updatedAt: new Date().toISOString(), source: 'TCGplayer (tcgcsv.com)', sets: out }));
 const ids = Object.keys(out);
