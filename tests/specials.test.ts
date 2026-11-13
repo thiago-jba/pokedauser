@@ -58,7 +58,14 @@ assert.deepEqual(todas.map((s) => s.setId), ['sv2', 'sv1', 'base']);
 assert.deepEqual(todas[1].tiles.map((t) => `${t.kind}:${t.card.localId}`), ['missing:003', 'owned:025', 'owned:025', 'owned:099', 'missing:100']);
 assert.equal(todas[1].ownedCards, 2);
 assert.equal(todas[1].totalCards, 4); // 3 da coleção + 1 incluída à mão (personagem no fundo)
-const br = buildSpecialSections(owned as any, cands, { view: 'todas', country: 'BR' }, info);
+const br = buildSpecialSections(owned as any, cands, { view: 'tenho', country: 'BR' }, info);
 assert.deepEqual(br.map((s) => s.setId), ['sv1']);
 assert.deepEqual(br[0].tiles.map((t) => t.key), ['o1', 'o4']);
+// todas + país: o que falta é o que não tenho DAQUELE país
+const jp = buildSpecialSections(owned as any, cands, { view: 'todas', country: 'JP' }, info);
+assert.deepEqual(jp.map((s) => s.setId), ['sv2', 'sv1', 'base']);
+assert.deepEqual(jp[1].tiles.map((t) => `${t.kind}:${t.card.localId}`), ['missing:003', 'owned:025', 'missing:100']);
+assert.equal(jp[1].ownedCards, 1);
+assert.equal(jp[1].totalCards, 3);
+assert.deepEqual(jp[2].tiles.map((t) => t.kind), ['missing']); // tenho o 58 dos EUA, mas não do Japão
 console.log('OK: coleção especial separada por expansão, com todas/tenho e filtro de país');

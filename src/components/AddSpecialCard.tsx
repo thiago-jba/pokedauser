@@ -26,12 +26,15 @@ export function AddSpecialCard({
   col,
   onClose,
   prefill,
+  country: presetCountry,
 }: {
   visible: boolean;
   col: SpecialCollection;
   onClose: () => void;
   /** carta já escolhida (tocar numa carta que falta, na tela da coleção) */
   prefill?: PokemonCardBrief | null;
+  /** país já escolhido (filtro de país da tela da coleção); senão, o país padrão */
+  country?: string;
 }) {
   const { addSpecialCard, data, defaultCountry } = useStore();
   const [sets, setSets] = useState<SetSummary[]>(() => loadSetsCacheAnyAge() ?? []);
@@ -55,7 +58,7 @@ export function AddSpecialCard({
 
   useEffect(() => {
     if (!visible) return;
-    setCountry(defaultCountry);
+    setCountry(presetCountry || defaultCountry);
     if (!sets.length)
       fetchAllSets()
         .then((l) => {

@@ -75,6 +75,7 @@ const numKey = (localId: string) => (/^\d+$/.test(localId) ? localId.padStart(6,
  * Monta as seções (uma por expansão).
  * - "tenho": só as cartas que tenho; com país escolhido, só as daquele país.
  * - "todas": todas as cartas do personagem/tipo; as que não tenho vêm como "missing" (foto apagada).
+ *   Com país escolhido, "falta" quer dizer "não tenho deste país" (mesmo que tenha de outro).
  * Expansões mais novas primeiro (`order` = posição na lista de expansões, que vem da mais nova para a mais antiga);
  * dentro de cada uma, pelo número.
  */
@@ -84,7 +85,7 @@ export function buildSpecialSections(
   opts: { view: SpecialView; country?: string },
   setInfo: (setId: string) => { name?: string; order?: number },
 ): SpecialSection[] {
-  const view: SpecialView = opts.country ? 'tenho' : opts.view;
+  const view: SpecialView = opts.view;
   const mine = opts.country ? owned.filter((c) => c.country === opts.country) : owned;
   const bySet = new Map<string, { setName: string; tiles: SpecialTile[]; ownedIds: Set<string>; total?: number }>();
   const sec = (setId: string, fallbackName: string) => {
@@ -101,7 +102,7 @@ export function buildSpecialSections(
     s.ownedIds.add(c.cardId);
   }
   if (view === 'todas') {
-    const ownedIds = new Set(owned.map((c) => c.cardId));
+    const ownedIds = new Set(mine.map((c) => c.cardId));
     const totals = new Map<string, Set<string>>();
     for (const c of candidates) {
       totals.set(c.setId, (totals.get(c.setId) ?? new Set()).add(c.id));

@@ -37,11 +37,12 @@ export function SpecialScreen({ uid, onBack }: { uid: string; onBack: () => void
   const [candidates, setCandidates] = useState<PokemonCardBrief[] | null>(null);
   const [loadingAll, setLoadingAll] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const [pickingFilterCountry, setPickingFilterCountry] = useState(false);
 
   const colCards = useMemo(() => col?.cards ?? [], [col?.cards]);
   const money = useSpecialPrices(colCards);
   const country = col?.country || '';
-  const view: SpecialView = country ? 'tenho' : col?.view ?? 'tenho';
+  const view: SpecialView = col?.view ?? 'tenho';
   const collapsed = useMemo(() => new Set(col?.collapsed ?? []), [col?.collapsed]);
   const toggleSet = (setId: string) => {
     if (!col) return;
@@ -91,8 +92,9 @@ export function SpecialScreen({ uid, onBack }: { uid: string; onBack: () => void
     const m = new Map<string, number>();
     for (const c of colCards) m.set(c.country, (m.get(c.country) ?? 0) + 1);
     const rank = (c: string) => (['BR', 'US', 'JP'].indexOf(c) + 1 || 9) + c;
+    if (col?.country && !m.has(col.country)) m.set(col.country, 0);
     return [...m.entries()].sort((a, b) => rank(a[0]).localeCompare(rank(b[0])));
-  }, [colCards]);
+  }, [colCards, col?.country]);
 
   if (!col) {
     return (
@@ -107,7 +109,7 @@ export function SpecialScreen({ uid, onBack }: { uid: string; onBack: () => void
   const inner = width - 16 * 2 - 14 * 2;
   const w = (inner - 10 * (cols - 1)) / cols;
   const total = col.cards.length;
-  const countries = countryList.length;
+  const countries = countryList.filter(([, n]) => n > 0).length;
   const what = col.kind === 'energia' ? 'Energias' : col.term ?? col.name;
 
   const ownedTile = (c: SpecialCard) => (
@@ -205,13 +207,13 @@ export function SpecialScreen({ uid, onBack }: { uid: string; onBack: () => void
 
             <Segmented<SpecialView>
               value={view}
-              onChange={(v) => setSpecialFilters(col.uid, { view: v, country: '' })}
+              onChange={(v) => setSpecialFilters(col.uid, { view: v })}
               options={[
                 { value: 'tenho', label: 'Só as que tenho' },
                 { value: 'todas', label: `Todas de ${what}` },
               ]}
             />
-            {countryList.length ? (
+            {total || country ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.countryRow}>
                 <Pressable style={[styles.chip, !country && styles.chipOn]} onPress={() => setSpecialFilters(col.uid, { country: '' })}>
                   <Text style={[styles.chipText, !country && styles.chipTextOn]}>{`Todos os países · ${total}`}</Text>
@@ -226,9 +228,18 @@ export function SpecialScreen({ uid, onBack }: { uid: string; onBack: () => void
                     <Text style={[styles.chipText, country === code && styles.chipTextOn]}>{`${countryName(code)} · ${n}`}</Text>
                   </Pressable>
                 ))}
+                <Pressable style={styles.chip} onPress={() => setPickingFilterCountry(true)}>
+                  <Text style={styles.chipText}>+ outro país</Text>
+                </Pressable>
               </ScrollView>
             ) : null}
-            {country ? <Text style={styles.hint}>{`Mostrando só as cartas que você tem do país ${countryName(country)}.`}</Text> : null}
+            {country ? (
+              <Text style={styles.hint}>
+                {view === 'todas'
+                  ? `País: ${countryName(country)}. Cartas apagadas são as que você não tem deste país.`
+                  : `Mostrando só as cartas que você tem do país ${countryName(country)}.`}
+              </Text>
+            ) : null}
 
             {total > 6 || view === 'todas' ? (
               <View style={styles.searchBox}>
@@ -267,7 +278,7 @@ export function SpecialScreen({ uid, onBack }: { uid: string; onBack: () => void
             {sections.length ? (
               <Text style={styles.hint}>
                 {view === 'todas'
-                  ? 'Cartas apagadas são as que você não tem: toque para adicionar. Toque numa carta sua para ver preços ou remover; segure para trocar o país.'
+                  ? 'Cartas apagadas são as que faltam: toque para adicionar. Toque numa carta sua para ver preços ou remover; segure para trocar o país.'
                   : 'Toque numa carta para ver preços ou remover; segure o dedo para trocar o país.'}
                 {' Toque no nome da expansão para recolher ou expandir.'}
               </Text>
@@ -313,7 +324,13 @@ export function SpecialScreen({ uid, onBack }: { uid: string; onBack: () => void
         onPick={(code) => countryFor && setSpecialCardCountry(col.uid, countryFor.uid, code)}
         onClose={() => setCountryFor(null)}
       />
-      <AddSpecialCard visible={!!adding} col={col} prefill={adding?.prefill} onClose={() => setAdding(null)} />
+      <AddSpecialCard visible={!!adding} col={col} prefill={adding?.prefill} country={country || undefined} onClose={() => setAdding(null)} />
+      <CountryPicker
+        visible={pickingFilterCountry}
+        current={country || undefined}
+        onPick={(code) => setSpecialFilters(col.uid, { country: code })}
+        onClose={() => setPickingFilterCountry(false)}
+      />
 
       <Modal visible={renaming !== null} transparent animationType="fade" onRequestClose={() => setRenaming(null)}>
         <Pressable style={styles.backdrop} onPress={() => setRenaming(null)}>
