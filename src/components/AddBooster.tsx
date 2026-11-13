@@ -2,7 +2,7 @@ import { Image } from 'expo-image';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { fetchAllSets, SetSummary } from '../api';
-import { artTitle, bulbapediaUrl, EXTRA_BOOSTER_SETS, fetchBoosterArts } from '../boosters';
+import { artTitle, bulbapediaUrl, EXTRA_BOOSTER_SETS, extraBoosterSet, fetchBoosterArts } from '../boosters';
 import type { BoosterArt } from '../boosters';
 import { countryName } from '../countries';
 import { loadSetsCacheAnyAge, saveSetsCache } from '../storage';
@@ -65,7 +65,14 @@ export function AddBooster({ visible, onClose, initialSetId }: { visible: boolea
         setArts(r.arts);
         setPage(r.page);
         setReleaseDate(r.releaseDate);
-        if (!r.arts.length) setError(r.page ? 'A Bulbapedia não tem fotos dos boosters desta expansão.' : 'Não achei esta expansão na Bulbapedia.');
+        if (!r.arts.length)
+          setError(
+            extraBoosterSet(id)
+              ? 'Não achei fotos dos pacotes deste produto na Bulbapedia. Toque para tentar de novo.'
+              : r.page
+                ? 'A Bulbapedia não tem fotos dos boosters desta expansão.'
+                : 'Não achei esta expansão na Bulbapedia.',
+          );
       })
       .catch(() => setError('Não foi possível buscar as estampas agora (Bulbapedia). Toque para tentar de novo.'))
       .finally(() => setLoading(false));

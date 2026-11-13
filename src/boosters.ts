@@ -19,8 +19,8 @@ export interface BoosterArt {
 const API = 'https://bulbapedia.bulbagarden.net/w/api.php?format=json&origin=*&';
 const TCG = 'https://api.tcgdex.net/v2/en';
 const CACHE_DAYS = 30;
-/** suba quando mudar isBoosterFile/parseBoosterFile (2: Giratina era descartada por conter "tin") */
-const CACHE_VERSION = 2;
+/** suba quando mudar isBoosterFile/parseBoosterFile ou as fontes (2: Giratina e "tin"; 3: Parceiros Iniciais) */
+const CACHE_VERSION = 3;
 
 const LANGS: Record<string, string> = {
   japanese: 'japonês',
@@ -95,11 +95,19 @@ export function parseBoosterFile(file: string): { label: string; lang?: string }
 /** Nome para mostrar: "Charizard (português)". */
 export const artTitle = (a: { label: string; lang?: string }) => (a.lang ? `${a.label} (${a.lang})` : a.label);
 
-const api = async (q: string) => {
-  const r = await fetch(API + q);
+const api = async (q: string, base = API) => {
+  const r = await fetch(base + q);
   if (!r.ok) throw new Error(`Bulbapedia ${r.status}`);
   return r.json();
 };
+/** Arquivo de imagens da Bulbapedia (onde ficam todas as fotos, inclusive as de produtos sem página própria). */
+const ARCHIVES_API = 'https://archives.bulbagarden.net/w/api.php?format=json&origin=*&';
+
+/** Procura arquivos de imagem no arquivo da Bulbapedia (ex.: "First Partner booster"). */
+async function searchArchiveFiles(query: string): Promise<string[]> {
+  const j = await api(`action=query&list=search&srnamespace=6&srlimit=50&srsearch=${encodeURIComponent(query)}`, ARCHIVES_API);
+  return (j.query?.search ?? []).map((x: any) => String(x.title).replace(/^File:/, '').replace(/ /g, '_'));
+}
 
 /** Página da expansão na Bulbapedia: "<nome> (TCG)", depois a sigla (que redireciona), depois a busca. */
 async function findPage(nameEn: string, abbr?: string, extra?: ExtraBoosterSet): Promise<string | null> {
@@ -131,6 +139,12 @@ export interface ExtraBoosterSet {
   search: string;
   /** título aceito como a página do produto */
   accept: RegExp;
+  /**
+   * Produto sem página própria: as fotos estão em várias páginas (todas em `pages` são lidas)
+   * e só valem os arquivos com este padrão no nome; se nada for achado, busca no arquivo de imagens.
+   */
+  files?: RegExp;
+  archiveSearch?: string[];
 }
 const tot = (year: number, date: string): ExtraBoosterSet => ({
   id: `tot${year}`,
@@ -147,9 +161,12 @@ export const EXTRA_BOOSTER_SETS: ExtraBoosterSet[] = [
     namePt: 'Parceiros Iniciais (2026)',
     nameEn: 'First Partner Illustration Collection',
     releaseDate: '2026-03-30',
-    pages: ['First Partner Illustration Collection (TCG)', 'First Partner Illustration Collection', 'First Partner Collection (TCG)'],
+    // sem página própria: as fotos dos pacotes ficam nas páginas de promos MEP e de produtos da série Mega Evolution
+    pages: ['MEP Black Star Promos (TCG)', 'Mega Evolution TCG Series merchandise', 'Pokémon 30th Anniversary'],
     search: 'First Partner Illustration Collection',
-    accept: /First Partner/i,
+    accept: /.*/,
+    files: /first.?partner|FPIC|FPC/i,
+    archiveSearch: ['First Partner booster', 'First Partner pack', 'First Partner Illustration Collection'],
   },
   tot(2025, '2025-09-05'),
   tot(2024, '2024-09-06'),
@@ -182,10 +199,34 @@ export async function fetchBoosterArts(
     ? { name: extra.nameEn, releaseDate: extra.releaseDate, abbreviation: undefined as any }
     : await (await fetch(`${TCG}/sets/${encodeURIComponent(setId)}`)).json();
   const releaseDate: string | undefined = set.releaseDate;
-  const page = await findPage(set.name, set.abbreviation?.official, extra);
-  if (!page) return { page: null, arts: [], releaseDate };
-  const parsed = await api(`action=parse&prop=images&page=${encodeURIComponent(page)}`);
-  const files: string[] = [...new Set<string>((parsed.parse?.images ?? []).filter(isBoosterFile))];
+  let page: string | null;
+  let files: string[];
+  if (extra?.files) {
+    // produto sem página própria: junta as fotos de pacote com o nome do produto de todas as páginas indicadas
+    const found = new Set<string>();
+    page = null;
+    for (const pg of extra.pages) {
+      try {
+        const parsed = await api(`action=parse&prop=images&redirects=1&page=${encodeURIComponent(pg)}`);
+        const imgs: string[] = (parsed.parse?.images ?? []).filter((f: string) => isBoosterFile(f) && extra.files!.test(f));
+        if (imgs.length && !page) page = pg;
+        imgs.forEach((f) => found.add(f));
+      } catch {}
+    }
+    if (!found.size)
+      for (const q of extra.archiveSearch ?? []) {
+        try {
+          (await searchArchiveFiles(q)).filter((f) => isBoosterFile(f) && extra.files!.test(f)).forEach((f) => found.add(f));
+        } catch {}
+      }
+    files = [...found];
+    if (!files.length) return { page, arts: [], releaseDate };
+  } else {
+    page = await findPage(set.name, set.abbreviation?.official, extra);
+    if (!page) return { page: null, arts: [], releaseDate };
+    const parsed = await api(`action=parse&prop=images&page=${encodeURIComponent(page)}`);
+    files = [...new Set<string>((parsed.parse?.images ?? []).filter(isBoosterFile))];
+  }
 
   // miniaturas, até 40 por pedido
   const thumbs = new Map<string, string>();
@@ -197,7 +238,12 @@ export async function fetchBoosterArts(
       if (url) thumbs.set(String(p.title).replace(/^File:/, '').replace(/ /g, '_'), url);
     }
   }
-  const arts: BoosterArt[] = files.map((file) => ({ file, ...parseBoosterFile(file), image: thumbs.get(file.replace(/ /g, '_')) }));
+  const arts: BoosterArt[] = files.map((file) => {
+    const info = parseBoosterFile(file);
+    // nos produtos extras, "_pack" sem idioma não quer dizer japonês (regra só vale para as galerias das expansões)
+    if (extra?.files && info.lang === 'japonês' && !/japan|_jp\b|_ja\b/i.test(file)) info.lang = undefined;
+    return { file, ...info, image: thumbs.get(file.replace(/ /g, '_')) };
+  });
   // internacionais primeiro, depois os outros idiomas (mantendo a ordem da galeria)
   arts.sort((a, b) => Number(!!a.lang) - Number(!!b.lang));
   const out: Cached = { fetchedAt: new Date().toISOString(), v: CACHE_VERSION, page, arts, releaseDate };

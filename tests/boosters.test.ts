@@ -58,3 +58,9 @@ const bc = byCountry([
 assert.deepEqual(bc.map((c) => c.country), ['BR', 'JP', 'DE']);
 assert.deepEqual(bc[0].items.map((b) => b.file), ['P', 'L']);
 console.log('OK: boosters agrupados por país dentro da expansão');
+
+import { EXTRA_BOOSTER_SETS } from '../src/boosters.ts';
+const fp = EXTRA_BOOSTER_SETS.find((x) => x.id === 'parceiros-iniciais-2026')!;
+assert.ok(fp.files!.test('MEP_First_Partner_Booster_Kanto.png') && isBoosterFile('MEP_First_Partner_Booster_Kanto.png'));
+assert.ok(!fp.files!.test('ME1_Booster_Mega_Lucario.png'));
+console.log('OK: Parceiros Iniciais procurados pelas fotos com "First Partner" no nome');
