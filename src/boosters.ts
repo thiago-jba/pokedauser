@@ -19,6 +19,8 @@ export interface BoosterArt {
 const API = 'https://bulbapedia.bulbagarden.net/w/api.php?format=json&origin=*&';
 const TCG = 'https://api.tcgdex.net/v2/en';
 const CACHE_DAYS = 30;
+/** suba quando mudar isBoosterFile/parseBoosterFile (2: Giratina era descartada por conter "tin") */
+const CACHE_VERSION = 2;
 
 const LANGS: Record<string, string> = {
   japanese: 'japonês',
@@ -49,8 +51,17 @@ const LANGS: Record<string, string> = {
 };
 
 /** É imagem de um pacote (e não de caixa, display, coleção…)? */
+// palavras que indicam outro produto (caixa, display, lata…). Comparação por PALAVRA INTEIRA do nome do arquivo:
+// "Giratina" contém "tin" e "Tinkaton" também, mas não são latas.
+const NOT_PACK = new Set(['box', 'display', 'bundle', 'blister', 'case', 'tin', 'tins', 'elite', 'sleeve', 'sleeved', 'scan', 'etb']);
+
 export function isBoosterFile(file: string): boolean {
-  return /booster|_pack\b|_pack\./i.test(file) && !/booster_?box|display|bundle|art_scan|blister|case|tin|elite|sleeve/i.test(file);
+  const words = file
+    .replace(/\.(png|jpe?g|webp|gif)$/i, '')
+    .split(/[_\s.-]+/)
+    .map((w) => w.toLowerCase());
+  if (!words.some((w) => w === 'booster' || w === 'pack')) return false;
+  return !words.some((w) => NOT_PACK.has(w));
 }
 
 const hasDigit = (s: string) => /\d/.test(s);
@@ -103,6 +114,8 @@ async function findPage(nameEn: string, abbr?: string): Promise<string | null> {
 
 interface Cached {
   fetchedAt: string;
+  /** versão das regras de leitura; guardado com regra antiga é buscado de novo */
+  v?: number;
   page: string | null;
   arts: BoosterArt[];
   /** data de lançamento da expansão (AAAA-MM-DD), para ordenar */
@@ -116,7 +129,7 @@ export async function fetchBoosterArts(
   force = false,
 ): Promise<{ page: string | null; arts: BoosterArt[]; releaseDate?: string }> {
   const hit = kvReadJson<Cached>(cachePath(setId));
-  if (hit && !force && hit.releaseDate && Date.now() - new Date(hit.fetchedAt).getTime() < CACHE_DAYS * 86400000 && hit.arts.length) return hit;
+  if (hit && !force && hit.v === CACHE_VERSION && hit.releaseDate && Date.now() - new Date(hit.fetchedAt).getTime() < CACHE_DAYS * 86400000 && hit.arts.length) return hit;
 
   const set = await (await fetch(`${TCG}/sets/${encodeURIComponent(setId)}`)).json();
   const releaseDate: string | undefined = set.releaseDate;
@@ -138,7 +151,7 @@ export async function fetchBoosterArts(
   const arts: BoosterArt[] = files.map((file) => ({ file, ...parseBoosterFile(file), image: thumbs.get(file.replace(/ /g, '_')) }));
   // internacionais primeiro, depois os outros idiomas (mantendo a ordem da galeria)
   arts.sort((a, b) => Number(!!a.lang) - Number(!!b.lang));
-  const out: Cached = { fetchedAt: new Date().toISOString(), page, arts, releaseDate };
+  const out: Cached = { fetchedAt: new Date().toISOString(), v: CACHE_VERSION, page, arts, releaseDate };
   if (arts.length) kvWriteJson(cachePath(setId), out);
   return out;
 }

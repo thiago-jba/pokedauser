@@ -17,6 +17,11 @@ assert.ok(isBoosterFile('SM1_Collection_Sun_pack.jpg'));
 assert.ok(!isBoosterFile('Base_Set_Booster_Box.jpg'));
 assert.ok(!isBoosterFile('Sun_and_Moon_Booster_Box.jpg'));
 assert.ok(!isBoosterFile('Expansion_Pack_20th_Art_Scan.jpg'));
+assert.ok(isBoosterFile('SWSH11_Booster_Giratina.jpg')); // "Giratina" contém "tin", mas não é lata
+assert.ok(isBoosterFile('SV2_Booster_Tinkaton.png'));
+assert.ok(!isBoosterFile('Lost_Origin_Giratina_Tin.jpg'));
+assert.ok(!isBoosterFile('SWSH11_Sleeved_Booster_Giratina.jpg'));
+assert.ok(!isBoosterFile('Lost_Origin_Elite_Trainer_Box.jpg'));
 console.log('OK: estampas de booster (nomes da Bulbapedia)');
 
 import { groupBoosters } from '../src/boosters.ts';
