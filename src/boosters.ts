@@ -4,6 +4,7 @@
 // As imagens da Bulbapedia não abrem se o pedido informar outro site como origem (Referer):
 // no celular isso não acontece; no navegador o app desliga o envio (App.tsx).
 import { kvReadJson, kvWriteJson } from './kv';
+import { WEB_URL } from './sync/config';
 
 export interface BoosterArt {
   /** nome do arquivo na Bulbapedia (identifica a estampa) */
@@ -19,8 +20,8 @@ export interface BoosterArt {
 const API = 'https://bulbapedia.bulbagarden.net/w/api.php?format=json&origin=*&';
 const TCG = 'https://api.tcgdex.net/v2/en';
 const CACHE_DAYS = 30;
-/** suba quando mudar isBoosterFile/parseBoosterFile ou as fontes (2: Giratina e "tin"; 3: Parceiros Iniciais) */
-const CACHE_VERSION = 3;
+/** suba quando mudar isBoosterFile/parseBoosterFile ou as fontes (2: Giratina e "tin"; 3: Parceiros Iniciais; 4: foto da Série 1) */
+const CACHE_VERSION = 4;
 
 const LANGS: Record<string, string> = {
   japanese: 'japonês',
@@ -145,6 +146,8 @@ export interface ExtraBoosterSet {
    */
   files?: RegExp;
   archiveSearch?: string[];
+  /** estampas com foto publicada junto com o app (pacotes que a Bulbapedia não tem), em public/boosters */
+  ownArts?: BoosterArt[];
 }
 const tot = (year: number, date: string): ExtraBoosterSet => ({
   id: `tot${year}`,
@@ -167,6 +170,15 @@ export const EXTRA_BOOSTER_SETS: ExtraBoosterSet[] = [
     accept: /.*/,
     files: /first.?partner|FPIC|FPC/i,
     archiveSearch: ['First Partner booster', 'First Partner pack', 'First Partner Illustration Collection'],
+    // foto enviada pelo usuário (pacote brasileiro da Série 1)
+    ownArts: [
+      {
+        file: 'app:parceiros-iniciais-serie-1-br',
+        label: 'Série 1 (Charmander, Chimchar, Litten…)',
+        lang: 'português',
+        image: `${WEB_URL}/boosters/parceiros-iniciais-serie-1-br.jpg`,
+      },
+    ],
   },
   tot(2025, '2025-09-05'),
   tot(2024, '2024-09-06'),
@@ -220,7 +232,7 @@ export async function fetchBoosterArts(
         } catch {}
       }
     files = [...found];
-    if (!files.length) return { page, arts: [], releaseDate };
+    if (!files.length && !extra.ownArts?.length) return { page, arts: [], releaseDate };
   } else {
     page = await findPage(set.name, set.abbreviation?.official, extra);
     if (!page) return { page: null, arts: [], releaseDate };
@@ -246,6 +258,8 @@ export async function fetchBoosterArts(
   });
   // internacionais primeiro, depois os outros idiomas (mantendo a ordem da galeria)
   arts.sort((a, b) => Number(!!a.lang) - Number(!!b.lang));
+  // fotos publicadas junto com o app (ex.: pacote brasileiro que a Bulbapedia não tem)
+  for (const own of extra?.ownArts ?? []) if (!arts.some((a) => a.file === own.file)) arts.push(own);
   const out: Cached = { fetchedAt: new Date().toISOString(), v: CACHE_VERSION, page, arts, releaseDate };
   if (arts.length) kvWriteJson(cachePath(setId), out);
   return out;
