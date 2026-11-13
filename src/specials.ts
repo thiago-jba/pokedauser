@@ -75,7 +75,8 @@ const numKey = (localId: string) => (/^\d+$/.test(localId) ? localId.padStart(6,
  * Monta as seções (uma por expansão).
  * - "tenho": só as cartas que tenho; com país escolhido, só as daquele país.
  * - "todas": todas as cartas do personagem/tipo; as que não tenho vêm como "missing" (foto apagada).
- * Expansões mais novas primeiro (ordem da lista de expansões); dentro de cada uma, pelo número.
+ * Expansões mais novas primeiro (`order` = posição na lista de expansões, que vem da mais nova para a mais antiga);
+ * dentro de cada uma, pelo número.
  */
 export function buildSpecialSections(
   owned: SpecialCard[],
@@ -114,7 +115,7 @@ export function buildSpecialSections(
     }
   }
   const localOf = (t: SpecialTile) => (t.kind === 'owned' ? t.card.localId : t.card.localId);
-  const order = (id: string) => setInfo(id).order ?? -1;
+  const order = (id: string) => setInfo(id).order ?? Number.MAX_SAFE_INTEGER;
   return [...bySet.entries()]
     .map(([setId, s]) => ({
       setId,
@@ -123,5 +124,5 @@ export function buildSpecialSections(
       ownedCards: s.ownedIds.size,
       totalCards: s.total,
     }))
-    .sort((a, b) => order(b.setId) - order(a.setId) || a.setName.localeCompare(b.setName, 'pt-BR'));
+    .sort((a, b) => order(a.setId) - order(b.setId) || a.setName.localeCompare(b.setName, 'pt-BR'));
 }

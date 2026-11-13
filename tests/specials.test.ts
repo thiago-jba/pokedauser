@@ -49,7 +49,7 @@ const cands = [
   { id: 'sv2-010', localId: '010', setId: 'sv2', name: 'Pikachu' },
   { id: 'base-58', localId: '58', setId: 'base', name: 'Pikachu' },
 ] as any[];
-const info = (id: string) => ({ name: id.toUpperCase(), order: { base: 1, sv1: 5, sv2: 6 }[id] });
+const info = (id: string) => ({ name: id.toUpperCase(), order: { sv2: 0, sv1: 1, base: 5 }[id] });
 const tenho = buildSpecialSections(owned as any, cands, { view: 'tenho' }, info);
 assert.deepEqual(tenho.map((s) => s.setId), ['sv1', 'base']);
 assert.equal(tenho[0].tiles.length, 3);
