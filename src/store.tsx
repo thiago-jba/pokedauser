@@ -51,7 +51,7 @@ interface Store {
   addSpecialCard: (uid: string, card: Omit<SpecialCard, 'uid' | 'addedAt'>) => void;
   removeSpecialCard: (uid: string, cardUid: string) => void;
   setSpecialCardCountry: (uid: string, cardUid: string, country: string) => void;
-  setSpecialFilters: (uid: string, f: { view?: 'tenho' | 'todas'; country?: string }) => void;
+  setSpecialFilters: (uid: string, f: { view?: 'tenho' | 'todas'; country?: string; collapsed?: string[] }) => void;
   /** Boosters */
   addBooster: (b: Omit<BoosterEntry, 'uid' | 'addedAt'>) => void;
   removeBooster: (uid: string) => void;
@@ -320,7 +320,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   );
   const setBoostersCollapsed = useCallback((ids: string[]) => setData((d) => ({ ...d, boostersCollapsed: ids })), []);
   const setSpecialFilters = useCallback(
-    (uid: string, f: { view?: 'tenho' | 'todas'; country?: string }) => updSpecial(uid, (c) => ({ ...c, ...f })),
+    (uid: string, f: { view?: 'tenho' | 'todas'; country?: string; collapsed?: string[] }) => updSpecial(uid, (c) => ({ ...c, ...f })),
     [], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const setHomeSort = useCallback((homeSort: string) => setData((d) => ({ ...d, homeSort })), []);

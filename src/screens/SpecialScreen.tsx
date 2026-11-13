@@ -42,6 +42,13 @@ export function SpecialScreen({ uid, onBack }: { uid: string; onBack: () => void
   const money = useSpecialPrices(colCards);
   const country = col?.country || '';
   const view: SpecialView = country ? 'tenho' : col?.view ?? 'tenho';
+  const collapsed = useMemo(() => new Set(col?.collapsed ?? []), [col?.collapsed]);
+  const toggleSet = (setId: string) => {
+    if (!col) return;
+    const next = new Set(collapsed);
+    next.has(setId) ? next.delete(setId) : next.add(setId);
+    setSpecialFilters(col.uid, { collapsed: [...next] });
+  };
 
   // todas as cartas do personagem/tipo (só quando pedir "todas")
   useEffect(() => {
@@ -247,11 +254,22 @@ export function SpecialScreen({ uid, onBack }: { uid: string; onBack: () => void
                 <Text style={styles.error}>Não foi possível buscar as cartas agora. Toque para tentar de novo.</Text>
               </Pressable>
             ) : null}
+            {sections.length > 1 ? (
+              <Pressable
+                style={styles.allBtn}
+                onPress={() =>
+                  setSpecialFilters(col.uid, { collapsed: sections.every((x) => collapsed.has(x.setId)) ? [] : sections.map((x) => x.setId) })
+                }
+              >
+                <Text style={styles.allText}>{sections.every((x) => collapsed.has(x.setId)) ? '▾ Expandir todas as expansões' : '▸ Recolher todas as expansões'}</Text>
+              </Pressable>
+            ) : null}
             {sections.length ? (
               <Text style={styles.hint}>
                 {view === 'todas'
                   ? 'Cartas apagadas são as que você não tem: toque para adicionar. Toque numa carta sua para ver preços ou remover; segure para trocar o país.'
                   : 'Toque numa carta para ver preços ou remover; segure o dedo para trocar o país.'}
+                {' Toque no nome da expansão para recolher ou expandir.'}
               </Text>
             ) : null}
           </View>
@@ -262,7 +280,8 @@ export function SpecialScreen({ uid, onBack }: { uid: string; onBack: () => void
         renderItem={({ item: sec }) => (
           <View style={styles.section}>
             <GlassShine r={22} />
-            <View style={styles.secHead}>
+            <Pressable style={[styles.secHead, collapsed.has(sec.setId) && { marginBottom: 0 }]} onPress={() => toggleSet(sec.setId)} hitSlop={4}>
+              <Text style={styles.arrow}>{collapsed.has(sec.setId) ? '▸' : '▾'}</Text>
               <SetLogo setId={sec.setId} logo={setById.get(sec.setId)?.s.logo} symbol={setById.get(sec.setId)?.s.symbol} style={styles.secLogo} />
               <Text style={styles.secName} numberOfLines={2}>
                 {sec.setName}
@@ -270,10 +289,12 @@ export function SpecialScreen({ uid, onBack }: { uid: string; onBack: () => void
               <Text style={styles.secCount}>
                 {sec.totalCards !== undefined ? `${sec.ownedCards} de ${sec.totalCards}` : `${sec.tiles.length}`}
               </Text>
-            </View>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-              {sec.tiles.map((t) => (t.kind === 'owned' ? ownedTile(t.card) : missingTile(t.card, t.key)))}
-            </View>
+            </Pressable>
+            {collapsed.has(sec.setId) ? null : (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                {sec.tiles.map((t) => (t.kind === 'owned' ? ownedTile(t.card) : missingTile(t.card, t.key)))}
+              </View>
+            )}
           </View>
         )}
       />
@@ -330,6 +351,18 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   secHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  arrow: { color: colors.textDim, fontSize: 14, width: 14 },
+  allBtn: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    marginBottom: 8,
+  },
+  allText: { color: colors.text, fontSize: 13, fontWeight: '700' },
   secLogo: { width: 84, height: 36 },
   secName: { color: colors.text, fontSize: 15, fontWeight: '900', flex: 1 },
   secCount: { color: colors.gold, fontWeight: '900' },

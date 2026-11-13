@@ -85,6 +85,8 @@ export interface SpecialCollection {
   /** filtros da tela: "tenho" (só as que tenho) ou "todas" (todas as cartas do personagem); país ("" = todos) */
   view?: 'tenho' | 'todas';
   country?: string;
+  /** expansões recolhidas na tela da coleção */
+  collapsed?: string[];
 }
 
 export interface SpecialCard extends PokedexCard {
