@@ -1,44 +1,91 @@
 import { Image } from 'expo-image';
-import React, { useMemo, useState } from 'react';
-import { FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AddSpecialCard } from '../components/AddSpecialCard';
 import { CountryPicker } from '../components/CountryPicker';
 import { Flag } from '../components/Flag';
 import { GlassShine } from '../components/Glass';
 import { PokedexCardDetail } from '../components/PokedexCardDetail';
-import { IconButton } from '../components/ui';
+import { IconButton, Segmented } from '../components/ui';
+import { SetLogo } from '../components/SetLogo';
+import { countryName } from '../countries';
+import type { PokemonCardBrief } from '../pokedex';
+import { loadSetsCacheAnyAge } from '../storage';
 import { ValueSummary } from '../components/ValueSummary';
 import { useSpecialPrices } from '../useSpecialPrices';
 import { useAppDimensions } from '../dimensions';
-import { specialSubtitle } from '../specials';
+import { buildSpecialSections, fetchSpecialCandidates, specialSubtitle } from '../specials';
+import type { SpecialView } from '../specials';
 import type { SpecialCard } from '../storage';
 import { useStore } from '../store';
 import { CARD_RATIO, colors } from '../theme';
 import { matchesQuery } from '../variants';
 import { SpecialCover } from './SpecialsScreen';
 
-/** Uma Coleção Especial: as cartas registradas, com país e versão. */
+/** Uma Coleção Especial: cartas separadas por expansão, com filtros "só as que tenho / todas" e por país. */
 export function SpecialScreen({ uid, onBack }: { uid: string; onBack: () => void }) {
   const insets = useSafeAreaInsets();
   const { width } = useAppDimensions();
-  const { data, removeSpecialCard, setSpecialCardCountry, renameSpecial } = useStore();
+  const { data, removeSpecialCard, setSpecialCardCountry, renameSpecial, setSpecialFilters } = useStore();
   const col = (data.specials ?? []).find((c) => c.uid === uid);
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState<{ prefill?: PokemonCardBrief } | null>(null);
   const [detail, setDetail] = useState<SpecialCard | null>(null);
   const [countryFor, setCountryFor] = useState<SpecialCard | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [q, setQ] = useState('');
+  const [candidates, setCandidates] = useState<PokemonCardBrief[] | null>(null);
+  const [loadingAll, setLoadingAll] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   const colCards = useMemo(() => col?.cards ?? [], [col?.cards]);
   const money = useSpecialPrices(colCards);
+  const country = col?.country || '';
+  const view: SpecialView = country ? 'tenho' : col?.view ?? 'tenho';
 
-  // mais recentes primeiro
-  const cards = useMemo(() => {
-    const all = [...(col?.cards ?? [])].reverse();
+  // todas as cartas do personagem/tipo (só quando pedir "todas")
+  useEffect(() => {
+    if (!col || view !== 'todas' || candidates) return;
+    let alive = true;
+    setLoadingAll(true);
+    setLoadError(false);
+    fetchSpecialCandidates(col)
+      .then((l) => alive && setCandidates(l))
+      .catch(() => alive && setLoadError(true))
+      .finally(() => alive && setLoadingAll(false));
+    return () => {
+      alive = false;
+    };
+  }, [view, col?.uid, candidates]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // nome e ordem (mais nova primeiro) de cada expansão, pela lista de expansões guardada no aparelho
+  const setsList = useMemo(() => loadSetsCacheAnyAge() ?? [], []);
+  const setById = useMemo(() => new Map(setsList.map((x, i) => [x.id, { s: x, order: i }])), [setsList]);
+
+  const sections = useMemo(() => {
+    const all = buildSpecialSections(colCards, candidates ?? [], { view, country: country || undefined }, (id) => ({
+      name: setById.get(id)?.s.namePt ?? setById.get(id)?.s.nameEn,
+      order: setById.get(id)?.order,
+    }));
     const t = q.trim();
-    return t ? all.filter((c) => matchesQuery(`${c.name} ${c.setName} ${c.localId} ${c.variantLabel ?? ''}`, t)) : all;
-  }, [col?.cards, q]);
+    if (!t) return all;
+    return all
+      .map((sec) => ({
+        ...sec,
+        tiles: sec.tiles.filter((x) =>
+          matchesQuery(`${x.card.name} ${sec.setName} ${x.card.localId} ${x.kind === 'owned' ? x.card.variantLabel ?? '' : ''}`, t),
+        ),
+      }))
+      .filter((sec) => sec.tiles.length);
+  }, [colCards, candidates, view, country, setById, q]);
+
+  // países das cartas que tenho, com quantas de cada (BR, US, JP primeiro)
+  const countryList = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const c of colCards) m.set(c.country, (m.get(c.country) ?? 0) + 1);
+    const rank = (c: string) => (['BR', 'US', 'JP'].indexOf(c) + 1 || 9) + c;
+    return [...m.entries()].sort((a, b) => rank(a[0]).localeCompare(rank(b[0])));
+  }, [colCards]);
 
   if (!col) {
     return (
@@ -49,10 +96,57 @@ export function SpecialScreen({ uid, onBack }: { uid: string; onBack: () => void
     );
   }
 
-  const cols = width >= 900 ? 4 : width >= 600 ? 3 : 2;
-  const w = (width - 16 * 2 - 12 * (cols - 1)) / cols;
+  const cols = width >= 900 ? 6 : width >= 600 ? 4 : 3;
+  const inner = width - 16 * 2 - 14 * 2;
+  const w = (inner - 10 * (cols - 1)) / cols;
   const total = col.cards.length;
-  const countries = new Set(col.cards.map((c) => c.country)).size;
+  const countries = countryList.length;
+  const what = col.kind === 'energia' ? 'Energias' : col.term ?? col.name;
+
+  const ownedTile = (c: SpecialCard) => (
+    <Pressable key={c.uid} onPress={() => setDetail(c)} onLongPress={() => setCountryFor(c)} delayLongPress={350} style={{ width: w }}>
+      <View style={[styles.cardFrame, { height: w * CARD_RATIO }]}>
+        {c.image ? (
+          <Image source={{ uri: `${c.image}/low.webp` }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
+        ) : (
+          <View style={styles.noImg}>
+            <Text style={styles.noImgText}>{c.name}</Text>
+          </View>
+        )}
+        <View style={styles.flag}>
+          <Flag code={c.country} size={14} />
+        </View>
+      </View>
+      <Text style={styles.cardNum} numberOfLines={1}>
+        {`${c.localId}${c.official && /^\d+$/.test(c.localId) ? `/${c.official}` : ''} · ${c.name}`}
+      </Text>
+      <Text style={styles.cardType} numberOfLines={1}>
+        {c.variantLabel ?? 'Normal'}
+      </Text>
+    </Pressable>
+  );
+  const missingTile = (c: PokemonCardBrief, key: string) => (
+    <Pressable key={key} onPress={() => setAdding({ prefill: c })} style={{ width: w }}>
+      <View style={[styles.cardFrame, styles.cardMissing, { height: w * CARD_RATIO }]}>
+        {c.image ? (
+          <Image source={{ uri: `${c.image}/low.webp` }} style={[StyleSheet.absoluteFill, { opacity: 0.3 }]} contentFit="cover" cachePolicy="disk" />
+        ) : (
+          <View style={styles.noImg}>
+            <Text style={styles.noImgText}>{c.name}</Text>
+          </View>
+        )}
+        <View style={styles.plus}>
+          <Text style={styles.plusText}>+</Text>
+        </View>
+      </View>
+      <Text style={[styles.cardNum, { color: colors.textFaint }]} numberOfLines={1}>
+        {`${c.localId} · ${c.name}`}
+      </Text>
+      <Text style={styles.cardType} numberOfLines={1}>
+        não tenho
+      </Text>
+    </Pressable>
+  );
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + 8 }]}>
@@ -61,15 +155,14 @@ export function SpecialScreen({ uid, onBack }: { uid: string; onBack: () => void
       </View>
 
       <FlatList
-        data={cards}
-        keyExtractor={(c) => c.uid}
-        key={`especial-${cols}`}
-        numColumns={cols}
-        columnWrapperStyle={{ gap: 12, paddingHorizontal: 16 }}
-        contentContainerStyle={{ gap: 12, paddingBottom: insets.bottom + 32 }}
+        data={sections}
+        keyExtractor={(sec) => sec.setId}
+        contentContainerStyle={{ paddingHorizontal: 16, gap: 12, paddingBottom: insets.bottom + 32 }}
         keyboardShouldPersistTaps="handled"
+        initialNumToRender={4}
+        windowSize={7}
         ListHeaderComponent={
-          <View style={{ paddingHorizontal: 16 }}>
+          <View>
             <View style={styles.hero}>
               <GlassShine r={26} />
               <SpecialCover col={col} size={96} />
@@ -98,11 +191,39 @@ export function SpecialScreen({ uid, onBack }: { uid: string; onBack: () => void
                 hint="todas as cartas desta coleção"
               />
             ) : null}
-            <Pressable style={styles.addBtn} onPress={() => setAdding(true)}>
+            <Pressable style={styles.addBtn} onPress={() => setAdding({})}>
               <Text style={styles.addText}>+ Adicionar carta</Text>
               <Text style={styles.addSub}>pela câmera ou escolhendo a expansão e a carta</Text>
             </Pressable>
-            {total > 6 ? (
+
+            <Segmented<SpecialView>
+              value={view}
+              onChange={(v) => setSpecialFilters(col.uid, { view: v, country: '' })}
+              options={[
+                { value: 'tenho', label: 'Só as que tenho' },
+                { value: 'todas', label: `Todas de ${what}` },
+              ]}
+            />
+            {countryList.length ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.countryRow}>
+                <Pressable style={[styles.chip, !country && styles.chipOn]} onPress={() => setSpecialFilters(col.uid, { country: '' })}>
+                  <Text style={[styles.chipText, !country && styles.chipTextOn]}>{`Todos os países · ${total}`}</Text>
+                </Pressable>
+                {countryList.map(([code, n]) => (
+                  <Pressable
+                    key={code}
+                    style={[styles.chip, country === code && styles.chipOn]}
+                    onPress={() => setSpecialFilters(col.uid, { country: country === code ? '' : code })}
+                  >
+                    <Flag code={code} size={14} />
+                    <Text style={[styles.chipText, country === code && styles.chipTextOn]}>{`${countryName(code)} · ${n}`}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            ) : null}
+            {country ? <Text style={styles.hint}>{`Mostrando só as cartas que você tem do país ${countryName(country)}.`}</Text> : null}
+
+            {total > 6 || view === 'todas' ? (
               <View style={styles.searchBox}>
                 <Text style={styles.searchIcon}>⌕</Text>
                 <TextInput
@@ -120,33 +241,40 @@ export function SpecialScreen({ uid, onBack }: { uid: string; onBack: () => void
                 ) : null}
               </View>
             ) : null}
-            {total ? <Text style={styles.hint}>Toque numa carta para ver preços ou remover; segure o dedo para trocar o país.</Text> : null}
+            {view === 'todas' && loadingAll ? <ActivityIndicator color={colors.accent} style={{ marginVertical: 12 }} /> : null}
+            {view === 'todas' && loadError ? (
+              <Pressable onPress={() => setCandidates(null)}>
+                <Text style={styles.error}>Não foi possível buscar as cartas agora. Toque para tentar de novo.</Text>
+              </Pressable>
+            ) : null}
+            {sections.length ? (
+              <Text style={styles.hint}>
+                {view === 'todas'
+                  ? 'Cartas apagadas são as que você não tem: toque para adicionar. Toque numa carta sua para ver preços ou remover; segure para trocar o país.'
+                  : 'Toque numa carta para ver preços ou remover; segure o dedo para trocar o país.'}
+              </Text>
+            ) : null}
           </View>
         }
-        renderItem={({ item }) => (
-          <Pressable onPress={() => setDetail(item)} onLongPress={() => setCountryFor(item)} delayLongPress={350} style={{ width: w }}>
-            <View style={[styles.cardFrame, { height: w * CARD_RATIO }]}>
-              {item.image ? (
-                <Image source={{ uri: `${item.image}/high.webp` }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
-              ) : (
-                <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
-                  <Text style={{ color: colors.textDim, textAlign: 'center' }}>{item.name}</Text>
-                </View>
-              )}
-              <View style={styles.flag}>
-                <Flag code={item.country} size={16} />
-              </View>
+        ListEmptyComponent={
+          !loadingAll && total ? <Text style={styles.empty}>Nenhuma carta com esses filtros.</Text> : null
+        }
+        renderItem={({ item: sec }) => (
+          <View style={styles.section}>
+            <GlassShine r={22} />
+            <View style={styles.secHead}>
+              <SetLogo setId={sec.setId} logo={setById.get(sec.setId)?.s.logo} symbol={setById.get(sec.setId)?.s.symbol} style={styles.secLogo} />
+              <Text style={styles.secName} numberOfLines={2}>
+                {sec.setName}
+              </Text>
+              <Text style={styles.secCount}>
+                {sec.totalCards !== undefined ? `${sec.ownedCards} de ${sec.totalCards}` : `${sec.tiles.length}`}
+              </Text>
             </View>
-            <Text style={styles.cardSet} numberOfLines={1}>
-              {item.setName}
-            </Text>
-            <Text style={styles.cardNum} numberOfLines={1}>
-              {`${item.localId}${item.official && /^\d+$/.test(item.localId) ? `/${item.official}` : ''} · ${item.name}`}
-            </Text>
-            <Text style={styles.cardType} numberOfLines={1}>
-              {[item.variantLabel ?? 'Normal', item.rarity].filter(Boolean).join(' · ')}
-            </Text>
-          </Pressable>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+              {sec.tiles.map((t) => (t.kind === 'owned' ? ownedTile(t.card) : missingTile(t.card, t.key)))}
+            </View>
+          </View>
         )}
       />
 
@@ -164,7 +292,7 @@ export function SpecialScreen({ uid, onBack }: { uid: string; onBack: () => void
         onPick={(code) => countryFor && setSpecialCardCountry(col.uid, countryFor.uid, code)}
         onClose={() => setCountryFor(null)}
       />
-      <AddSpecialCard visible={adding} col={col} onClose={() => setAdding(false)} />
+      <AddSpecialCard visible={!!adding} col={col} prefill={adding?.prefill} onClose={() => setAdding(null)} />
 
       <Modal visible={renaming !== null} transparent animationType="fade" onRequestClose={() => setRenaming(null)}>
         <Pressable style={styles.backdrop} onPress={() => setRenaming(null)}>
@@ -193,6 +321,39 @@ export function SpecialScreen({ uid, onBack }: { uid: string; onBack: () => void
 }
 
 const styles = StyleSheet.create({
+  section: {
+    padding: 14,
+    borderRadius: 22,
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  secHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  secLogo: { width: 84, height: 36 },
+  secName: { color: colors.text, fontSize: 15, fontWeight: '900', flex: 1 },
+  secCount: { color: colors.gold, fontWeight: '900' },
+  cardMissing: { borderColor: colors.border, borderStyle: 'dashed' },
+  noImg: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 4 },
+  noImgText: { color: colors.textDim, textAlign: 'center', fontSize: 11 },
+  plus: { position: 'absolute', alignSelf: 'center', top: '40%', width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center' },
+  plusText: { color: '#fff', fontSize: 20, fontWeight: '900', marginTop: -2 },
+  countryRow: { gap: 8, paddingVertical: 10 },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  chipOn: { backgroundColor: colors.accentDim, borderColor: colors.accent },
+  chipText: { color: colors.textDim, fontSize: 13, fontWeight: '700' },
+  chipTextOn: { color: colors.text },
+  error: { color: colors.gold, fontSize: 13, marginVertical: 8 },
   root: { flex: 1, backgroundColor: 'transparent' },
   topBar: { paddingHorizontal: 16, marginBottom: 8, flexDirection: 'row' },
   empty: { color: colors.textDim, textAlign: 'center', marginTop: 30 },

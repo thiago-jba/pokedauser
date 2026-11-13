@@ -38,3 +38,27 @@ assert.equal(kept.collections.length, 1); // a mudança feita no outro aparelho 
 const emptied = merge3(withSp, withSp, protectMissingParts(withSp, { ...withSp, specials: [] })) as any;
 assert.equal(emptied.specials.length, 0);
 console.log('OK: versão antiga do app não apaga partes novas da coleção');
+
+import { buildSpecialSections } from '../src/specials.ts';
+const own = (uid: string, cardId: string, setId: string, localId: string, country: string) => ({ ...card(uid), cardId, setId, setName: setId, localId, country });
+const owned = [own('o1', 'sv1-025', 'sv1', '025', 'BR'), own('o2', 'sv1-025', 'sv1', '025', 'JP'), own('o3', 'base-58', 'base', '58', 'US'), own('o4', 'sv1-099', 'sv1', '099', 'BR')];
+const cands = [
+  { id: 'sv1-025', localId: '025', setId: 'sv1', name: 'Pikachu' },
+  { id: 'sv1-100', localId: '100', setId: 'sv1', name: 'Pikachu ex' },
+  { id: 'sv1-003', localId: '003', setId: 'sv1', name: 'Pikachu' },
+  { id: 'sv2-010', localId: '010', setId: 'sv2', name: 'Pikachu' },
+  { id: 'base-58', localId: '58', setId: 'base', name: 'Pikachu' },
+] as any[];
+const info = (id: string) => ({ name: id.toUpperCase(), order: { base: 1, sv1: 5, sv2: 6 }[id] });
+const tenho = buildSpecialSections(owned as any, cands, { view: 'tenho' }, info);
+assert.deepEqual(tenho.map((s) => s.setId), ['sv1', 'base']);
+assert.equal(tenho[0].tiles.length, 3);
+const todas = buildSpecialSections(owned as any, cands, { view: 'todas' }, info);
+assert.deepEqual(todas.map((s) => s.setId), ['sv2', 'sv1', 'base']);
+assert.deepEqual(todas[1].tiles.map((t) => `${t.kind}:${t.card.localId}`), ['missing:003', 'owned:025', 'owned:025', 'owned:099', 'missing:100']);
+assert.equal(todas[1].ownedCards, 2);
+assert.equal(todas[1].totalCards, 4); // 3 da coleção + 1 incluída à mão (personagem no fundo)
+const br = buildSpecialSections(owned as any, cands, { view: 'todas', country: 'BR' }, info);
+assert.deepEqual(br.map((s) => s.setId), ['sv1']);
+assert.deepEqual(br[0].tiles.map((t) => t.key), ['o1', 'o4']);
+console.log('OK: coleção especial separada por expansão, com todas/tenho e filtro de país');

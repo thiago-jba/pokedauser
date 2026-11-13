@@ -21,7 +21,18 @@ import { Flag } from './Flag';
 import { Chip, Segmented } from './ui';
 
 /** Inclusão de carta numa Coleção Especial: pela câmera ou escolhendo a expansão e a carta. */
-export function AddSpecialCard({ visible, col, onClose }: { visible: boolean; col: SpecialCollection; onClose: () => void }) {
+export function AddSpecialCard({
+  visible,
+  col,
+  onClose,
+  prefill,
+}: {
+  visible: boolean;
+  col: SpecialCollection;
+  onClose: () => void;
+  /** carta já escolhida (tocar numa carta que falta, na tela da coleção) */
+  prefill?: PokemonCardBrief | null;
+}) {
   const { addSpecialCard, data, defaultCountry } = useStore();
   const [sets, setSets] = useState<SetSummary[]>(() => loadSetsCacheAnyAge() ?? []);
   const [related, setRelated] = useState<PokemonCardBrief[]>([]);
@@ -52,6 +63,10 @@ export function AddSpecialCard({ visible, col, onClose }: { visible: boolean; co
           saveSetsCache(l);
         })
         .catch(() => {});
+    if (prefill) {
+      setExtra([prefill]);
+      choose(prefill);
+    }
     setLoading(true);
     fetchSpecialCandidates(col)
       .then(setRelated)
